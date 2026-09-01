@@ -22,9 +22,13 @@ import { onAuthStateChanged } from 'firebase/auth';
 import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import AddModal from './components/AddModal';
+import EditBookModal from './components/EditBookModal';
+import EditQuoteModal from './components/EditQuoteModal';
+import BookDetailModal from './components/BookDetailModal';
 import ShareModal from './components/ShareModal';
 import MonthlyRecapModal from './components/MonthlyRecapModal';
 import ReadingHeatmap from './components/ReadingHeatmap';
+import DeleteConfirmModal from './components/DeleteConfirmModal';
 import { 
   Search, 
   Plus, 
@@ -32,12 +36,12 @@ import {
   BookOpen, 
   Check, 
   Quote as QuoteIcon, 
-  TrendingUp, 
   LogOut, 
   Edit2, 
-  CheckCheck,
-  Share2,
-  Sparkles
+  CheckCheck, 
+  Share2, 
+  Sparkles, 
+  Edit3 
 } from 'lucide-react';
 
 export default function App() {
@@ -49,20 +53,34 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // State Share Modal Card Biasa
+  // State Modal Detail & Edit
+  const [selectedBookForDetail, setSelectedBookForDetail] = useState(null);
+  const [bookToEdit, setBookToEdit] = useState(null);
+  const [quoteToEdit, setQuoteToEdit] = useState(null);
+
+  // State Konfirmasi Hapus
+  const [deleteDialog, setDeleteDialog] = useState({
+    isOpen: false,
+    type: 'book', // 'book' | 'quote'
+    id: null,
+    title: '',
+    message: ''
+  });
+
+  // State Share Modal
   const [shareData, setShareData] = useState(null);
   const [shareType, setShareType] = useState('book');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-
-  // State Modal Rekap Bulanan
   const [isRecapModalOpen, setIsRecapModalOpen] = useState(false);
 
-  // State Target Bulanan
+  // State Target (Monthly vs Annually)
+  const [targetType, setTargetType] = useState('monthly');
   const [monthlyTarget, setMonthlyTarget] = useState(5);
+  const [annualTarget, setAnnualTarget] = useState(30);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [tempTarget, setTempTarget] = useState(5);
 
-  // State Edit Halaman Buku
+  // State Edit Halaman Cepat
   const [editingBookId, setEditingBookId] = useState(null);
   const [editCurrentPage, setEditCurrentPage] = useState('');
   const [editTotalPages, setEditTotalPages] = useState('');
@@ -86,9 +104,12 @@ export default function App() {
 
     const userDocRef = doc(db, 'userSettings', user.uid);
     getDoc(userDocRef).then((docSnap) => {
-      if (docSnap.exists() && docSnap.data().monthlyTarget) {
-        setMonthlyTarget(docSnap.data().monthlyTarget);
-        setTempTarget(docSnap.data().monthlyTarget);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.monthlyTarget) setMonthlyTarget(data.monthlyTarget);
+        if (data.annualTarget) setAnnualTarget(data.annualTarget);
+        if (data.targetType) setTargetType(data.targetType);
+        setTempTarget(data.targetType === 'annually' ? (data.annualTarget || 30) : (data.monthlyTarget || 5));
       }
     }).catch((err) => console.error("Error reading target:", err));
 
@@ -111,13 +132,35 @@ export default function App() {
   const handleSaveTarget = async () => {
     const targetNum = parseInt(tempTarget, 10);
     if (isNaN(targetNum) || targetNum <= 0) return;
-    setMonthlyTarget(targetNum);
+    
+    const updateObj = { targetType };
+    if (targetType === 'monthly') {
+      setMonthlyTarget(targetNum);
+      updateObj.monthlyTarget = targetNum;
+    } else {
+      setAnnualTarget(targetNum);
+      updateObj.annualTarget = targetNum;
+    }
+    setIsEditingTarget(false);
+
+    if (user) {
+      try {
+        await setDoc(doc(db, 'userSettings', user.uid), updateObj, { merge: true });
+      } catch (err) {
+        console.error('Gagal menyimpan target:', err);
+      }
+    }
+  };
+
+  const handleToggleTargetType = async (type) => {
+    setTargetType(type);
+    setTempTarget(type === 'monthly' ? monthlyTarget : annualTarget);
     setIsEditingTarget(false);
     if (user) {
       try {
-        await setDoc(doc(db, 'userSettings', user.uid), { monthlyTarget: targetNum }, { merge: true });
+        await setDoc(doc(db, 'userSettings', user.uid), { targetType: type }, { merge: true });
       } catch (err) {
-        console.error('Gagal menyimpan target:', err);
+        console.error('Gagal update tipe target:', err);
       }
     }
   };
@@ -135,6 +178,17 @@ export default function App() {
     }
   };
 
+  const handleUpdateBookData = async (bookId, updatedFields) => {
+    try {
+      await updateDoc(doc(db, 'books', bookId), updatedFields);
+      if (selectedBookForDetail && selectedBookForDetail.id === bookId) {
+        setSelectedBookForDetail((prev) => ({ ...prev, ...updatedFields }));
+      }
+    } catch (err) {
+      console.error('Gagal update data buku:', err);
+    }
+  };
+
   const handleAddQuote = async (quoteData) => {
     if (!user) return;
     try {
@@ -148,16 +202,28 @@ export default function App() {
     }
   };
 
+  const handleUpdateQuoteData = async (quoteId, updatedFields) => {
+    try {
+      await updateDoc(doc(db, 'quotes', quoteId), updatedFields);
+    } catch (err) {
+      console.error('Gagal update quote:', err);
+    }
+  };
+
   const handleToggleStatus = async (book) => {
     try {
       const newStatus = book.status === 'reading' ? 'finished' : 'reading';
       const todayStr = new Date().toISOString().split('T')[0];
       const dates = book.activityDates ? [...new Set([...book.activityDates, todayStr])] : [todayStr];
-      await updateDoc(doc(db, 'books', book.id), { 
+      const updatedFields = { 
         status: newStatus,
         activityDates: dates,
-        currentPage: newStatus === 'finished' && book.totalPages ? book.totalPages : (book.currentPage || 0)
-      });
+        currentPage: newStatus === 'finished' && book.totalPages ? book.totalPages : (book.currentPage || 0),
+      };
+      await updateDoc(doc(db, 'books', book.id), updatedFields);
+      if (selectedBookForDetail && selectedBookForDetail.id === book.id) {
+        setSelectedBookForDetail((prev) => ({ ...prev, ...updatedFields }));
+      }
     } catch (err) {
       console.error('Gagal update status buku:', err);
     }
@@ -170,26 +236,61 @@ export default function App() {
     const dates = book.activityDates ? [...new Set([...book.activityDates, todayStr])] : [todayStr];
     
     const isNowFinished = totP > 0 && curP >= totP;
+    const updatedFields = {
+      currentPage: curP,
+      totalPages: totP,
+      status: isNowFinished ? 'finished' : book.status,
+      activityDates: dates,
+    };
 
     try {
-      await updateDoc(doc(db, 'books', book.id), {
-        currentPage: curP,
-        totalPages: totP,
-        status: isNowFinished ? 'finished' : book.status,
-        activityDates: dates
-      });
+      await updateDoc(doc(db, 'books', book.id), updatedFields);
       setEditingBookId(null);
+      if (selectedBookForDetail && selectedBookForDetail.id === book.id) {
+        setSelectedBookForDetail((prev) => ({ ...prev, ...updatedFields }));
+      }
     } catch (err) {
       console.error('Gagal update progress halaman:', err);
     }
   };
 
-  const handleDeleteBook = async (id) => {
-    try { await deleteDoc(doc(db, 'books', id)); } catch (err) { console.error(err); }
+  // Trigger modal konfirmasi hapus buku
+  const promptDeleteBook = (book) => {
+    setDeleteDialog({
+      isOpen: true,
+      type: 'book',
+      id: book.id,
+      title: 'Hapus Buku',
+      message: `Apakah kamu yakin ingin menghapus "${book.title}" dari koleksimu? Semua data terkait buku ini akan dihapus.`
+    });
   };
 
-  const handleDeleteQuote = async (id) => {
-    try { await deleteDoc(doc(db, 'quotes', id)); } catch (err) { console.error(err); }
+  // Trigger modal konfirmasi hapus quote
+  const promptDeleteQuote = (quote) => {
+    setDeleteDialog({
+      isOpen: true,
+      type: 'quote',
+      id: quote.id,
+      title: 'Hapus Kutipan',
+      message: `Apakah kamu yakin ingin menghapus kutipan ini?`
+    });
+  };
+
+  // Eksekusi hapus setelah disetujui di modal
+  const handleConfirmDelete = async () => {
+    if (!deleteDialog.id) return;
+    try {
+      if (deleteDialog.type === 'book') {
+        await deleteDoc(doc(db, 'books', deleteDialog.id));
+        if (selectedBookForDetail?.id === deleteDialog.id) {
+          setSelectedBookForDetail(null);
+        }
+      } else {
+        await deleteDoc(doc(db, 'quotes', deleteDialog.id));
+      }
+    } catch (err) {
+      console.error('Gagal menghapus data:', err);
+    }
   };
 
   const handleOpenShare = (data, type) => {
@@ -208,9 +309,10 @@ export default function App() {
 
   const ongoingBooks = books.filter((b) => b.status === 'reading');
   const finishedBooks = books.filter((b) => b.status === 'finished');
-  
-  const completionPercentage = monthlyTarget > 0 
-    ? Math.min(Math.round((finishedBooks.length / monthlyTarget) * 100), 100) 
+
+  const currentTarget = targetType === 'monthly' ? monthlyTarget : annualTarget;
+  const completionPercentage = currentTarget > 0 
+    ? Math.min(Math.round((finishedBooks.length / currentTarget) * 100), 100) 
     : 0;
 
   if (loadingAuth) return null;
@@ -277,7 +379,7 @@ export default function App() {
                 className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-[#204E38] hover:bg-[#153425] text-white text-xs font-bold rounded-2xl shadow-md shadow-[#204E38]/20 transition-all active:scale-95"
               >
                 <Plus size={15} strokeWidth={2.5} />
-                <span>Tambah Buku</span>
+                <span>Tambah Data</span>
               </button>
 
               <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
@@ -318,20 +420,33 @@ export default function App() {
             </div>
           </div>
 
-          {/* Reading Goals Card Khusus Mobile (Dengan Tombol Rekap Bulanan) */}
+          {/* Reading Goals Card Mobile */}
           <div className="block xl:hidden bg-white/80 backdrop-blur-md rounded-[24px] p-4 border border-white/80 shadow-[0_4px_20px_rgba(20,45,30,0.03)] space-y-2.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <TrendingUp size={14} className="text-[#204E38]" />
-                <span className="font-extrabold text-xs text-[#13231B]">Reading Goals</span>
+              <div className="flex items-center gap-1 bg-[#EAF2ED] p-0.5 rounded-xl">
+                <button
+                  onClick={() => handleToggleTargetType('monthly')}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all ${
+                    targetType === 'monthly' ? 'bg-[#204E38] text-white' : 'text-[#6C8476]'
+                  }`}
+                >
+                  Bulanan
+                </button>
+                <button
+                  onClick={() => handleToggleTargetType('annually')}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all ${
+                    targetType === 'annually' ? 'bg-[#204E38] text-white' : 'text-[#6C8476]'
+                  }`}
+                >
+                  Tahunan
+                </button>
               </div>
 
               <div className="flex items-center gap-1.5">
-                {/* Tombol Rekap Mobile */}
                 {finishedBooks.length > 0 && (
                   <button
                     onClick={() => setIsRecapModalOpen(true)}
-                    className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-all"
+                    className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2.5 py-1 rounded-xl text-[10.5px] font-bold transition-all"
                   >
                     <Sparkles size={11} />
                     <span>Rekap</span>
@@ -354,10 +469,13 @@ export default function App() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => setIsEditingTarget(true)}
+                    onClick={() => {
+                      setTempTarget(currentTarget.toString());
+                      setIsEditingTarget(true);
+                    }}
                     className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] px-2 py-0.5 rounded-md text-[10.5px] font-bold"
                   >
-                    <span>Target: {monthlyTarget}</span>
+                    <span>Target: {currentTarget}</span>
                     <Edit2 size={9} />
                   </button>
                 )}
@@ -366,7 +484,7 @@ export default function App() {
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] font-bold text-[#4A6455]">
-                <span>{finishedBooks.length} dari {monthlyTarget} buku selesai</span>
+                <span>{finishedBooks.length} dari {currentTarget} buku ({targetType === 'monthly' ? 'Bulan Ini' : 'Tahun Ini'})</span>
                 <span>{completionPercentage}%</span>
               </div>
               <div className="w-full bg-[#E5EDE7] h-2 rounded-full overflow-hidden">
@@ -408,7 +526,10 @@ export default function App() {
                           className="bg-white rounded-[22px] md:rounded-[24px] p-3 md:p-3.5 border border-white/80 shadow-[0_8px_25px_rgba(20,45,30,0.04)] flex flex-col justify-between group hover:shadow-md transition-all"
                         >
                           {/* Cover */}
-                          <div className="w-full aspect-[4/5] bg-[#E6EFE9] rounded-[16px] overflow-hidden relative mb-2.5 shadow-inner flex items-center justify-center p-2">
+                          <div 
+                            onClick={() => setSelectedBookForDetail(book)}
+                            className="w-full aspect-[4/5] bg-[#E6EFE9] rounded-[16px] overflow-hidden relative mb-2.5 shadow-inner flex items-center justify-center p-2 cursor-pointer"
+                          >
                             <img
                               src={book.coverUrl || 'https://via.placeholder.com/150x225?text=No+Cover'}
                               alt={book.title}
@@ -417,7 +538,10 @@ export default function App() {
                             />
                             
                             <button
-                              onClick={() => handleToggleStatus(book)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleStatus(book);
+                              }}
                               className={`absolute top-2 right-2 p-1.5 rounded-full backdrop-blur-md shadow-sm transition-all ${
                                 isFinished ? 'bg-[#204E38] text-white' : 'bg-white/80 text-[#6C8476] hover:bg-white'
                               }`}
@@ -429,8 +553,13 @@ export default function App() {
 
                           {/* Info Buku & Progres Halaman */}
                           <div className="space-y-1.5">
-                            <div className="space-y-0.5">
-                              <h4 className="font-bold text-xs text-[#13231B] line-clamp-1 leading-snug">{book.title}</h4>
+                            <div 
+                              onClick={() => setSelectedBookForDetail(book)}
+                              className="space-y-0.5 cursor-pointer"
+                            >
+                              <h4 className="font-bold text-xs text-[#13231B] line-clamp-1 leading-snug hover:text-[#204E38] transition-colors">
+                                {book.title}
+                              </h4>
                               <p className="text-[11px] font-medium text-[#7C9486] line-clamp-1">{book.author}</p>
                             </div>
 
@@ -497,7 +626,6 @@ export default function App() {
                                     {totP > 0 && <span className="font-bold text-[#204E38]">{progressPct}%</span>}
                                   </div>
 
-                                  {/* Bar Progres */}
                                   {totP > 0 && (
                                     <div className="w-full bg-[#E5EDE7] h-1.5 rounded-full overflow-hidden">
                                       <div 
@@ -521,6 +649,13 @@ export default function App() {
                             
                             <div className="flex items-center gap-1">
                               <button
+                                onClick={() => setBookToEdit(book)}
+                                title="Edit Buku"
+                                className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
                                 onClick={() => handleOpenShare(book, 'book')}
                                 title="Bagikan"
                                 className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
@@ -528,7 +663,7 @@ export default function App() {
                                 <Share2 size={13} />
                               </button>
                               <button
-                                onClick={() => handleDeleteBook(book.id)}
+                                onClick={() => promptDeleteBook(book)}
                                 className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
                               >
                                 <Trash2 size={13} />
@@ -543,10 +678,10 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* Tab Kutipan */
+            /* Tab Kutipan & Catatan */
             <div className="space-y-4">
               <div className="flex justify-between items-center px-1">
-                <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Kutipan</h3>
+                <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Kutipan & Catatan</h3>
                 <span className="text-xs font-bold text-[#6C8476]">{quotes.length} Quotes</span>
               </div>
 
@@ -557,14 +692,47 @@ export default function App() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {quotes.map((q) => (
-                    <div key={q.id} className="bg-white rounded-[24px] p-5 border border-white/80 shadow-[0_8px_25px_rgba(20,45,30,0.04)] flex flex-col justify-between">
-                      <div>
-                        <QuoteIcon size={20} className="text-[#204E38]/30 mb-2" />
-                        <p className="text-xs italic text-[#25392D] font-medium leading-relaxed">"{q.quote}"</p>
+                    <div key={q.id} className="bg-white rounded-[24px] p-5 border border-white/80 shadow-[0_8px_25px_rgba(20,45,30,0.04)] flex flex-col justify-between gap-3">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <QuoteIcon size={18} className="text-[#204E38]/30" />
+                          {q.pageNumber && (
+                            <span className="text-[10px] font-bold bg-[#EAF2ED] text-[#204E38] px-2 py-0.5 rounded-md">
+                              Hal. {q.pageNumber}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <p className="text-xs italic text-[#25392D] font-medium leading-relaxed">
+                          "{q.quote}"
+                        </p>
+
+                        {/* Catatan / Refleksi Pribadi */}
+                        {q.personalNote && (
+                          <div className="bg-[#F4F8F5] p-2.5 rounded-xl border-l-2 border-[#204E38] text-[11px] text-[#3A5043] leading-relaxed">
+                            <span className="font-bold text-[#204E38] block text-[10px] mb-0.5">Catatan:</span>
+                            {q.personalNote}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
-                        <span className="text-[11px] font-bold text-[#204E38]">— {q.author}</span>
+
+                      <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                        <div>
+                          <span className="text-[11px] font-bold text-[#204E38] block">— {q.author}</span>
+                          {q.bookTitle && (
+                            <span className="text-[10px] text-[#7C9486] font-medium block">
+                              di: {q.bookTitle}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setQuoteToEdit(q)}
+                            title="Edit Kutipan"
+                            className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
+                          >
+                            <Edit3 size={13} />
+                          </button>
                           <button
                             onClick={() => handleOpenShare(q, 'quote')}
                             title="Bagikan"
@@ -573,7 +741,7 @@ export default function App() {
                             <Share2 size={13} />
                           </button>
                           <button
-                            onClick={() => handleDeleteQuote(q.id)}
+                            onClick={() => promptDeleteQuote(q)}
                             className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
                           >
                             <Trash2 size={14} />
@@ -591,12 +759,28 @@ export default function App() {
         {/* Panel Kanan (Desktop) */}
         <aside className="hidden xl:flex flex-col w-72 space-y-5 flex-shrink-0">
           
-          {/* Target Bulanan Card */}
+          {/* Target Card Desktop */}
           <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-5 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] space-y-3.5">
             <div className="flex items-center justify-between">
-              <h3 className="font-extrabold text-xs text-[#13231B]">Reading Goals</h3>
+              <div className="flex items-center gap-1 bg-[#EAF2ED] p-0.5 rounded-xl">
+                <button
+                  onClick={() => handleToggleTargetType('monthly')}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all ${
+                    targetType === 'monthly' ? 'bg-[#204E38] text-white' : 'text-[#6C8476]'
+                  }`}
+                >
+                  Bulanan
+                </button>
+                <button
+                  onClick={() => handleToggleTargetType('annually')}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all ${
+                    targetType === 'annually' ? 'bg-[#204E38] text-white' : 'text-[#6C8476]'
+                  }`}
+                >
+                  Tahunan
+                </button>
+              </div>
               
-              {/* Tombol Rekap Desktop */}
               {finishedBooks.length > 0 && (
                 <button
                   onClick={() => setIsRecapModalOpen(true)}
@@ -610,7 +794,7 @@ export default function App() {
             </div>
 
             <div className="flex items-center justify-between text-xs font-bold text-[#4A6455] pt-0.5">
-              <span>Target Bulan Ini:</span>
+              <span>Target {targetType === 'monthly' ? 'Bulan Ini' : 'Tahun Ini'}:</span>
               {isEditingTarget ? (
                 <div className="flex items-center gap-1.5">
                   <input
@@ -627,10 +811,13 @@ export default function App() {
                 </div>
               ) : (
                 <button
-                  onClick={() => setIsEditingTarget(true)}
+                  onClick={() => {
+                    setTempTarget(currentTarget.toString());
+                    setIsEditingTarget(true);
+                  }}
                   className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] px-2 py-0.5 rounded-md hover:bg-[#DBE8DF] transition-all"
                 >
-                  <span>{monthlyTarget} Buku</span>
+                  <span>{currentTarget} Buku</span>
                   <Edit2 size={11} />
                 </button>
               )}
@@ -650,14 +837,13 @@ export default function App() {
             </div>
 
             <div className="pt-2 text-[10.5px] text-[#6C8476] leading-relaxed border-t border-slate-100">
-              <span className="font-bold text-[#13231B]">{finishedBooks.length}</span> dari {monthlyTarget} buku target bulan ini selesai dibaca.
+              <span className="font-bold text-[#13231B]">{finishedBooks.length}</span> dari {currentTarget} buku target selesai dibaca.
             </div>
           </div>
 
-          {/* Reading Heatmap Card (Khusus Desktop) */}
           <ReadingHeatmap books={books} />
 
-          {/* Ongoing Book Quick List */}
+          {/* Ongoing Book List */}
           <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-5 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] flex-1 space-y-3">
             <h3 className="font-extrabold text-xs text-[#13231B]">Sedang Dibaca</h3>
             
@@ -666,7 +852,11 @@ export default function App() {
             ) : (
               <div className="space-y-2.5">
                 {ongoingBooks.slice(0, 3).map((b) => (
-                  <div key={b.id} className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white transition-all">
+                  <div 
+                    key={b.id} 
+                    onClick={() => setSelectedBookForDetail(b)}
+                    className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white transition-all cursor-pointer"
+                  >
                     <div className="w-9 h-12 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 shadow-sm">
                       <img src={b.coverUrl || 'https://via.placeholder.com/80x120?text=No+Cover'} alt={b.title} crossOrigin="anonymous" className="w-full h-full object-cover" />
                     </div>
@@ -696,9 +886,41 @@ export default function App() {
         onClose={() => setIsModalOpen(false)}
         onAddBook={handleAddBook}
         onAddQuote={handleAddQuote}
+        books={books}
       />
 
-      {/* Modal Share Single Card */}
+      <EditBookModal
+        isOpen={Boolean(bookToEdit)}
+        onClose={() => setBookToEdit(null)}
+        book={bookToEdit}
+        onSave={handleUpdateBookData}
+      />
+
+      {/* Modal Edit Quote */}
+      <EditQuoteModal
+        isOpen={Boolean(quoteToEdit)}
+        onClose={() => setQuoteToEdit(null)}
+        quoteData={quoteToEdit}
+        onSave={handleUpdateQuoteData}
+        books={books}
+      />
+
+      <BookDetailModal
+        isOpen={Boolean(selectedBookForDetail)}
+        onClose={() => setSelectedBookForDetail(null)}
+        book={selectedBookForDetail}
+        quotes={quotes}
+        onEditBook={(b) => setBookToEdit(b)}
+        onDeleteBook={(bookId) => {
+          const bookObj = books.find((b) => b.id === bookId);
+          if (bookObj) promptDeleteBook(bookObj);
+        }}
+        onToggleStatus={handleToggleStatus}
+        onAddQuoteToBook={handleAddQuote}
+        onOpenShareQuote={(q) => handleOpenShare(q, 'quote')}
+        onOpenShareBook={(b) => handleOpenShare(b, 'book')}
+      />
+
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
@@ -706,11 +928,19 @@ export default function App() {
         type={shareType}
       />
 
-      {/* Modal Rekap Bulanan */}
       <MonthlyRecapModal
         isOpen={isRecapModalOpen}
         onClose={() => setIsRecapModalOpen(false)}
         finishedBooks={finishedBooks}
+      />
+
+      {/* Modal Dialog Konfirmasi Hapus */}
+      <DeleteConfirmModal
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmDelete}
+        title={deleteDialog.title}
+        message={deleteDialog.message}
       />
     </div>
   );

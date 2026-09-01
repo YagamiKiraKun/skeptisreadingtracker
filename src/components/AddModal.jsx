@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, BookOpen, Quote as QuoteIcon, Sparkles, Loader2 } from 'lucide-react';
 
-export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
-  const [tab, setTab] = useState('book'); // 'book' | 'quote'
+export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books = [] }) {
+  const [tab, setTab] = useState('book');
   
   // State Form Buku
   const [title, setTitle] = useState('');
@@ -16,11 +16,13 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
   const [searching, setSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // State Form Quote
+  // State Form Quote + Note
   const [quoteText, setQuoteText] = useState('');
   const [quoteAuthor, setQuoteAuthor] = useState('');
+  const [selectedBookId, setSelectedBookId] = useState('');
+  const [pageNumber, setPageNumber] = useState('');
+  const [personalNote, setPersonalNote] = useState('');
 
-  // Fungsi pencarian ke Google Books
   const searchGoogleBooks = async (queryText) => {
     if (!queryText || queryText.trim().length < 2) {
       setSearchResults([]);
@@ -55,7 +57,6 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
     }
   };
 
-  // Debounce otomatis saat mengetik judul
   useEffect(() => {
     const timer = setTimeout(() => {
       if (title.length >= 2) {
@@ -99,17 +100,36 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
     onClose();
   };
 
+  const handleBookSelectionChange = (bookId) => {
+    setSelectedBookId(bookId);
+    if (bookId) {
+      const selected = books.find((b) => b.id === bookId);
+      if (selected && selected.author) {
+        setQuoteAuthor(selected.author);
+      }
+    }
+  };
+
   const handleSubmitQuote = (e) => {
     e.preventDefault();
     if (!quoteText.trim()) return;
 
+    const selected = books.find((b) => b.id === selectedBookId);
+
     onAddQuote({
       quote: quoteText.trim(),
-      author: quoteAuthor.trim() || 'Anonim',
+      author: quoteAuthor.trim() || (selected ? selected.author : 'Anonim'),
+      bookId: selectedBookId || null,
+      bookTitle: selected ? selected.title : null,
+      pageNumber: pageNumber.trim() ? parseInt(pageNumber, 10) : null,
+      personalNote: personalNote.trim() || null
     });
 
     setQuoteText('');
     setQuoteAuthor('');
+    setSelectedBookId('');
+    setPageNumber('');
+    setPersonalNote('');
     onClose();
   };
 
@@ -117,7 +137,6 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-[32px] p-6 max-w-md w-full border border-white/80 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
         
-        {/* Header Tab */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 bg-[#EAF2ED] p-1 rounded-2xl">
             <button
@@ -136,7 +155,7 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
               }`}
             >
               <QuoteIcon size={13} />
-              <span>Kutipan</span>
+              <span>Kutipan & Note</span>
             </button>
           </div>
 
@@ -147,8 +166,6 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
 
         {tab === 'book' ? (
           <form onSubmit={handleSubmitBook} className="space-y-3.5 relative">
-            
-            {/* Input Judul dengan Pencarian Google Books */}
             <div className="space-y-1 relative">
               <label className="text-[11px] font-bold text-[#4A6455] flex items-center justify-between">
                 <span>Judul Buku</span>
@@ -162,7 +179,7 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
                 <Search size={14} className="text-[#8FA597]" />
                 <input
                   type="text"
-                  placeholder="Ketik judul buku (cth: The Brothers Karamazov)..."
+                  placeholder="Ketik judul buku (cth: Atomic Habits)..."
                   className="bg-transparent text-xs font-medium w-full outline-none text-[#13231B]"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -171,7 +188,6 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
                 />
               </div>
 
-              {/* Dropdown Hasil Pencarian Otomatis */}
               {showDropdown && searchResults.length > 0 && (
                 <div className="absolute top-full left-0 right-0 z-30 bg-white mt-1.5 rounded-2xl shadow-2xl border border-[#DCE5DF] overflow-hidden">
                   <div className="px-3 py-2 bg-[#F4F8F5] border-b border-slate-100 flex items-center justify-between">
@@ -214,7 +230,6 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
               )}
             </div>
 
-            {/* Penulis */}
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-[#4A6455]">Penulis</label>
               <input
@@ -226,7 +241,6 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
               />
             </div>
 
-            {/* Input Halaman */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-[#4A6455]">Hal. Saat Ini</label>
@@ -252,9 +266,8 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
               </div>
             </div>
 
-            {/* URL Cover */}
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#4A6455]">URL Cover (Terisi Otomatis / Manual)</label>
+              <label className="text-[11px] font-bold text-[#4A6455]">URL Cover</label>
               <input
                 type="text"
                 placeholder="https://..."
@@ -272,13 +285,31 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
             </button>
           </form>
         ) : (
-          <form onSubmit={handleSubmitQuote} className="space-y-3.5">
+          <form onSubmit={handleSubmitQuote} className="space-y-3">
+            {books.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-[#4A6455]">Tautkan ke Buku</label>
+                <select
+                  value={selectedBookId}
+                  onChange={(e) => handleBookSelectionChange(e.target.value)}
+                  className="bg-[#F4F8F5] px-3.5 py-2.5 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B]"
+                >
+                  <option value="">-- Tanpa Tautan Buku --</option>
+                  {books.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title} ({b.author})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#4A6455]">Kutipan / Catatan</label>
+              <label className="text-[11px] font-bold text-[#4A6455]">Kutipan Buku</label>
               <textarea
-                rows="4"
-                placeholder="Tulis kutipan favorit atau catatan penting..."
-                className="bg-[#F4F8F5] p-3.5 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B] resize-none"
+                rows="3"
+                placeholder="Tulis kutipan penting dari buku..."
+                className="bg-[#F4F8F5] p-3 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B] resize-none"
                 value={quoteText}
                 onChange={(e) => setQuoteText(e.target.value)}
                 required
@@ -286,22 +317,47 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote }) {
               />
             </div>
 
+            {/* Input Personal Note */}
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#4A6455]">Penulis / Sumber</label>
-              <input
-                type="text"
-                placeholder="Nama penulis atau judul buku..."
-                className="bg-[#F4F8F5] px-3.5 py-2.5 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B]"
-                value={quoteAuthor}
-                onChange={(e) => setQuoteAuthor(e.target.value)}
+              <label className="text-[11px] font-bold text-[#4A6455]">Catatan / Refleksi Pribadi (Opsional)</label>
+              <textarea
+                rows="2"
+                placeholder="Apa pendapat atau pelajaranmu tentang kutipan ini?"
+                className="bg-[#F4F8F5] p-3 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B] resize-none placeholder:text-slate-400"
+                value={personalNote}
+                onChange={(e) => setPersonalNote(e.target.value)}
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-[#4A6455]">Penulis / Sumber</label>
+                <input
+                  type="text"
+                  placeholder="Nama penulis..."
+                  className="bg-[#F4F8F5] px-3.5 py-2.5 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B]"
+                  value={quoteAuthor}
+                  onChange={(e) => setQuoteAuthor(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-[#4A6455]">Halaman (Opsional)</label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Contoh: 142"
+                  className="bg-[#F4F8F5] px-3.5 py-2.5 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B]"
+                  value={pageNumber}
+                  onChange={(e) => setPageNumber(e.target.value)}
+                />
+              </div>
             </div>
 
             <button
               type="submit"
               className="w-full py-3 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs shadow-md transition-all active:scale-95 mt-2"
             >
-              Simpan Kutipan
+              Simpan Kutipan & Catatan
             </button>
           </form>
         )}

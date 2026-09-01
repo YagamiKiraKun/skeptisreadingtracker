@@ -53,12 +53,12 @@ export default function ShareModal({ isOpen, onClose, data, type }) {
           </button>
         </div>
 
-        {/* Card Story: Solid Pastel Sage Green (#86A789) */}
+        {/* Card Story */}
         <div 
           ref={cardRef} 
           className="w-full aspect-[9/16] bg-[#86A789] rounded-[28px] p-6 text-white flex flex-col justify-between items-center shadow-md relative overflow-hidden"
         >
-          {/* Top Brand Label */}
+          {/* Top Brand */}
           <div className="flex items-center gap-2 bg-white/20 px-3.5 py-1.5 rounded-full border border-white/30 z-10">
             <BookOpen size={13} className="text-white" />
             <span className="text-[11px] font-bold tracking-wider uppercase text-white">Minor Notes</span>
@@ -71,7 +71,6 @@ export default function ShareModal({ isOpen, onClose, data, type }) {
                 Currently Reading
               </span>
               
-              {/* Cover Buku */}
               <div className="w-36 aspect-[3/4.5] rounded-xl overflow-hidden shadow-[0_12px_25px_rgba(20,45,30,0.18)] border-2 border-white/50 bg-[#E6EFE9]">
                 <img 
                   src={data.coverUrl || 'https://via.placeholder.com/150x225?text=No+Cover'} 
@@ -87,21 +86,43 @@ export default function ShareModal({ isOpen, onClose, data, type }) {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center text-center space-y-4 z-10 w-full px-3 my-auto">
-              <QuoteIcon size={32} className="text-white/40 mb-1" />
+            <div className="flex flex-col items-center text-center space-y-3 z-10 w-full px-2 my-auto">
+              <QuoteIcon size={28} className="text-white/40" />
+              
               <p className="text-sm italic font-medium leading-relaxed text-white">
                 "{data.quote}"
               </p>
-              <span className="text-xs font-bold text-[#EAF2EC] tracking-wide">— {data.author}</span>
+
+              {/* Personal Note di Share Card */}
+              {data.personalNote && (
+                <div className="w-full bg-black/15 backdrop-blur-sm rounded-2xl p-3 border border-white/20 text-left my-1">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-[#D5E5DA] block mb-1">
+                    Reflection:
+                  </span>
+                  <p className="text-xs font-normal text-white leading-snug">
+                    {data.personalNote}
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-0.5 pt-1">
+                <span className="text-xs font-bold text-[#EAF2EC] tracking-wide block">— {data.author}</span>
+                <div className="flex items-center justify-center gap-1.5 text-[10px] text-[#DCE7E0] font-medium">
+                  {data.bookTitle && <span>{data.bookTitle}</span>}
+                  {data.bookTitle && data.pageNumber && <span>&bull;</span>}
+                  {data.pageNumber && <span>Hal. {data.pageNumber}</span>}
+                </div>
+              </div>
             </div>
           )}
 
           {/* Footer Card */}
           <div className="text-center z-10 border-t border-white/20 pt-3 w-full">
-            <p className="text-[10px] text-[#EAF2EC] font-semibold tracking-wide">Reading Journey</p>
+            <p className="text-[10px] text-[#EAF2EC] font-semibold tracking-wide">Minor Notes &bull; oleh Skeptis Minor</p>
           </div>
         </div>
 
+        {/* Action Button */}
         <button
           onClick={handleShare}
           disabled={loading}
