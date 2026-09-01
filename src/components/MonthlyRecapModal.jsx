@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo } from 'react';
 import { toBlob, toPng } from 'html-to-image';
-import { X, Share2, BookOpen, Star, Sparkles, Check } from 'lucide-react';
+import { X, Share2, BookOpen, Star, Sparkles } from 'lucide-react';
 
 export default function MonthlyRecapModal({ isOpen, onClose, finishedBooks = [] }) {
   const cardRef = useRef(null);
@@ -88,7 +88,7 @@ export default function MonthlyRecapModal({ isOpen, onClose, finishedBooks = [] 
           </div>
         ) : (
           <>
-            {/* Pemilih Best Read (Jika buku selesai > 1) */}
+            {/* Pemilih Best Read */}
             {finishedBooks.length > 1 && (
               <div className="w-full space-y-1.5 bg-[#F4F8F5] p-2.5 rounded-2xl border border-[#DCE5DF]">
                 <span className="text-[10px] font-bold text-[#4A6455] px-1 flex items-center gap-1">
@@ -112,7 +112,7 @@ export default function MonthlyRecapModal({ isOpen, onClose, finishedBooks = [] 
               </div>
             )}
 
-            {/* Visual Canvas Rekap (Rasio 9:16 - Solid Sage Green) */}
+            {/* Visual Canvas Rekap */}
             <div 
               ref={cardRef} 
               className="w-full aspect-[9/16] bg-[#86A789] rounded-[28px] p-5 text-white flex flex-col justify-between shadow-md relative overflow-hidden"
@@ -128,7 +128,7 @@ export default function MonthlyRecapModal({ isOpen, onClose, finishedBooks = [] 
                 </span>
               </div>
 
-              {/* SECTION ATAS: Best Read Highlight */}
+              {/* Best Read Highlight */}
               {bestBook && (
                 <div className="flex flex-col items-center text-center space-y-2 z-10 my-auto py-2">
                   <div className="flex items-center gap-1 text-[9px] font-extrabold uppercase tracking-widest text-[#13231B] bg-[#EAF2EC] px-2.5 py-0.5 rounded-full shadow-sm">
@@ -152,7 +152,7 @@ export default function MonthlyRecapModal({ isOpen, onClose, finishedBooks = [] 
                 </div>
               )}
 
-              {/* SECTION BAWAH: List Buku Lainnya Yang Selesai */}
+              {/* List Buku Lainnya */}
               <div className="z-10 bg-white/15 backdrop-blur-sm rounded-2xl p-3 border border-white/20 space-y-2">
                 <div className="flex justify-between items-center text-[10px] font-bold text-[#EAF2EC] px-0.5">
                   <span>Books Completed</span>
@@ -190,7 +190,7 @@ export default function MonthlyRecapModal({ isOpen, onClose, finishedBooks = [] 
               </div>
             </div>
 
-            {/* Action Share Button */}
+            {/* Tombol Bagikan */}
             <button
               onClick={handleShare}
               disabled={loading}
