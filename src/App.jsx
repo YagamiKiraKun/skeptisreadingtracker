@@ -22,8 +22,12 @@ import { onAuthStateChanged } from 'firebase/auth';
 import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
 import AddModal from './components/AddModal';
+import ShareModal from './components/ShareModal';
+import MonthlyRecapModal from './components/MonthlyRecapModal';
+import ReadingHeatmap from './components/ReadingHeatmap';
 import { 
   Search, 
+  Plus, 
   Trash2, 
   BookOpen, 
   Check, 
@@ -31,7 +35,9 @@ import {
   TrendingUp, 
   LogOut, 
   Edit2, 
-  CheckCheck 
+  CheckCheck,
+  Share2,
+  Sparkles
 } from 'lucide-react';
 
 export default function App() {
@@ -43,10 +49,23 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // State Share Modal Card Biasa
+  const [shareData, setShareData] = useState(null);
+  const [shareType, setShareType] = useState('book');
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // State Modal Rekap Bulanan
+  const [isRecapModalOpen, setIsRecapModalOpen] = useState(false);
+
   // State Target Bulanan
   const [monthlyTarget, setMonthlyTarget] = useState(5);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [tempTarget, setTempTarget] = useState(5);
+
+  // State Edit Halaman Buku
+  const [editingBookId, setEditingBookId] = useState(null);
+  const [editCurrentPage, setEditCurrentPage] = useState('');
+  const [editTotalPages, setEditTotalPages] = useState('');
 
   // 1. Pantau Status Login
   useEffect(() => {
@@ -57,7 +76,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // 2. Fetch Data Buku, Quotes, dan Setting Target User secara Realtime
+  // 2. Fetch Data Realtime
   useEffect(() => {
     if (!user) {
       setBooks([]);
@@ -65,7 +84,6 @@ export default function App() {
       return;
     }
 
-    // Ambil target bulanan tersimpan dari Firestore
     const userDocRef = doc(db, 'userSettings', user.uid);
     getDoc(userDocRef).then((docSnap) => {
       if (docSnap.exists() && docSnap.data().monthlyTarget) {
@@ -74,21 +92,15 @@ export default function App() {
       }
     }).catch((err) => console.error("Error reading target:", err));
 
-    // Realtime Sync Buku
     const qBooks = query(collection(db, 'books'), where('userId', '==', user.uid));
     const unsubBooks = onSnapshot(qBooks, (snapshot) => {
       setBooks(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error fetching books:", error);
-    });
+    }, (error) => console.error("Error fetching books:", error));
 
-    // Realtime Sync Quotes
     const qQuotes = query(collection(db, 'quotes'), where('userId', '==', user.uid));
     const unsubQuotes = onSnapshot(qQuotes, (snapshot) => {
       setQuotes(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error fetching quotes:", error);
-    });
+    }, (error) => console.error("Error fetching quotes:", error));
 
     return () => {
       unsubBooks();
@@ -96,14 +108,11 @@ export default function App() {
     };
   }, [user]);
 
-  // Simpan Target Bulanan
   const handleSaveTarget = async () => {
     const targetNum = parseInt(tempTarget, 10);
     if (isNaN(targetNum) || targetNum <= 0) return;
-    
     setMonthlyTarget(targetNum);
     setIsEditingTarget(false);
-
     if (user) {
       try {
         await setDoc(doc(db, 'userSettings', user.uid), { monthlyTarget: targetNum }, { merge: true });
@@ -113,7 +122,6 @@ export default function App() {
     }
   };
 
-  // Tambah Buku ke Firestore
   const handleAddBook = async (bookData) => {
     if (!user) return;
     try {
@@ -123,12 +131,10 @@ export default function App() {
         createdAt: new Date().toISOString(),
       });
     } catch (err) {
-      console.error('Error saat menyimpan buku:', err);
       alert('Gagal simpan ke database: ' + err.message);
     }
   };
 
-  // Tambah Quote ke Firestore
   const handleAddQuote = async (quoteData) => {
     if (!user) return;
     try {
@@ -138,40 +144,60 @@ export default function App() {
         createdAt: new Date().toISOString(),
       });
     } catch (err) {
-      console.error('Error saat menyimpan quote:', err);
       alert('Gagal simpan quote: ' + err.message);
     }
   };
 
-  // Ubah Status Baca
   const handleToggleStatus = async (book) => {
     try {
       const newStatus = book.status === 'reading' ? 'finished' : 'reading';
-      await updateDoc(doc(db, 'books', book.id), { status: newStatus });
+      const todayStr = new Date().toISOString().split('T')[0];
+      const dates = book.activityDates ? [...new Set([...book.activityDates, todayStr])] : [todayStr];
+      await updateDoc(doc(db, 'books', book.id), { 
+        status: newStatus,
+        activityDates: dates,
+        currentPage: newStatus === 'finished' && book.totalPages ? book.totalPages : (book.currentPage || 0)
+      });
     } catch (err) {
       console.error('Gagal update status buku:', err);
     }
   };
 
-  // Hapus Buku
+  const handleSavePageProgress = async (book) => {
+    const curP = parseInt(editCurrentPage, 10) || 0;
+    const totP = parseInt(editTotalPages, 10) || (book.totalPages || 0);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const dates = book.activityDates ? [...new Set([...book.activityDates, todayStr])] : [todayStr];
+    
+    const isNowFinished = totP > 0 && curP >= totP;
+
+    try {
+      await updateDoc(doc(db, 'books', book.id), {
+        currentPage: curP,
+        totalPages: totP,
+        status: isNowFinished ? 'finished' : book.status,
+        activityDates: dates
+      });
+      setEditingBookId(null);
+    } catch (err) {
+      console.error('Gagal update progress halaman:', err);
+    }
+  };
+
   const handleDeleteBook = async (id) => {
-    try {
-      await deleteDoc(doc(db, 'books', id));
-    } catch (err) {
-      console.error('Gagal hapus buku:', err);
-    }
+    try { await deleteDoc(doc(db, 'books', id)); } catch (err) { console.error(err); }
   };
 
-  // Hapus Quote
   const handleDeleteQuote = async (id) => {
-    try {
-      await deleteDoc(doc(db, 'quotes', id));
-    } catch (err) {
-      console.error('Gagal hapus quote:', err);
-    }
+    try { await deleteDoc(doc(db, 'quotes', id)); } catch (err) { console.error(err); }
   };
 
-  // Filter Buku
+  const handleOpenShare = (data, type) => {
+    setShareData(data);
+    setShareType(type);
+    setIsShareModalOpen(true);
+  };
+
   const filteredBooks = books.filter((b) => {
     const matchesSearch = (b.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (b.author || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -183,14 +209,12 @@ export default function App() {
   const ongoingBooks = books.filter((b) => b.status === 'reading');
   const finishedBooks = books.filter((b) => b.status === 'finished');
   
-  // Persentase Progress
   const completionPercentage = monthlyTarget > 0 
     ? Math.min(Math.round((finishedBooks.length / monthlyTarget) * 100), 100) 
     : 0;
 
   if (loadingAuth) return null;
 
-  // Layar Login
   if (!user) {
     return (
       <div className="min-h-screen w-full bg-[#E9EFEA] flex items-center justify-center p-4">
@@ -199,10 +223,8 @@ export default function App() {
             <BookOpen size={30} />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-[#13231B] tracking-tight">SkeptisReads</h1>
-            <p className="text-xs text-[#6C8476] mt-2 leading-relaxed">
-              Minor Notes & personal reading tracker minimalis.
-            </p>
+            <h1 className="text-2xl font-black text-[#13231B] tracking-tight">Minor Notes</h1>
+            <p className="text-xs text-[#6C8476] mt-2 leading-relaxed">oleh Skeptis Minor</p>
           </div>
           <button
             onClick={loginWithGoogle}
@@ -233,10 +255,10 @@ export default function App() {
           totalFinished={finishedBooks.length}
         />
 
-        {/* Konten Tengah */}
-        <main className="flex-1 flex flex-col gap-5 overflow-hidden">
+        {/* Konten Utama */}
+        <main className="flex-1 flex flex-col gap-4 md:gap-5 overflow-hidden">
           
-          {/* Top Bar Header */}
+          {/* Header */}
           <header className="flex items-center justify-between gap-3 bg-white/70 backdrop-blur-md px-4 py-3 md:px-6 md:py-4 rounded-[24px] md:rounded-[28px] border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)]">
             <div className="flex-1 flex items-center gap-2.5 bg-[#F4F8F5] px-3.5 py-2 md:px-4 md:py-2.5 rounded-2xl border border-[#DCE5DF] max-w-md">
               <Search size={16} className="text-[#8FA597]" />
@@ -249,24 +271,34 @@ export default function App() {
               />
             </div>
 
-            <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
-              <img
-                src={user.photoURL || 'https://via.placeholder.com/80'}
-                alt={user.displayName || 'User'}
-                referrerPolicy="no-referrer"
-                className="w-9 h-9 md:w-10 md:h-10 rounded-2xl object-cover border border-white shadow-sm"
-              />
-              <button
-                onClick={logoutUser}
-                title="Keluar"
-                className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-[#204E38] hover:bg-[#153425] text-white text-xs font-bold rounded-2xl shadow-md shadow-[#204E38]/20 transition-all active:scale-95"
               >
-                <LogOut size={16} />
+                <Plus size={15} strokeWidth={2.5} />
+                <span>Tambah Buku</span>
               </button>
+
+              <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
+                <img
+                  src={user.photoURL || 'https://via.placeholder.com/80'}
+                  alt={user.displayName || 'User'}
+                  referrerPolicy="no-referrer"
+                  className="w-9 h-9 md:w-10 md:h-10 rounded-2xl object-cover border border-white shadow-sm"
+                />
+                <button
+                  onClick={logoutUser}
+                  title="Keluar"
+                  className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
             </div>
           </header>
 
-          {/* Hero Banner Pastel Minimalis (Gaya image_0f2b4f) */}
+          {/* Hero Banner */}
           <div className="bg-gradient-to-r from-[#A1B8A8] to-[#86A789] text-white p-5 md:p-6 rounded-[28px] md:rounded-[32px] shadow-[0_10px_25px_rgba(45,75,55,0.06)] flex justify-between items-center relative overflow-hidden">
             <div className="space-y-1 z-10">
               <p className="text-[11px] md:text-xs font-semibold text-[#EBF2ED] tracking-wide">
@@ -286,7 +318,67 @@ export default function App() {
             </div>
           </div>
 
-          {/* Konten Grid */}
+          {/* Reading Goals Card Khusus Mobile (Dengan Tombol Rekap Bulanan) */}
+          <div className="block xl:hidden bg-white/80 backdrop-blur-md rounded-[24px] p-4 border border-white/80 shadow-[0_4px_20px_rgba(20,45,30,0.03)] space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <TrendingUp size={14} className="text-[#204E38]" />
+                <span className="font-extrabold text-xs text-[#13231B]">Reading Goals</span>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {/* Tombol Rekap Mobile */}
+                {finishedBooks.length > 0 && (
+                  <button
+                    onClick={() => setIsRecapModalOpen(true)}
+                    className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-all"
+                  >
+                    <Sparkles size={11} />
+                    <span>Rekap</span>
+                  </button>
+                )}
+
+                {isEditingTarget ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="1"
+                      className="w-11 px-1.5 py-0.5 rounded-lg border border-[#204E38] text-center text-xs font-bold bg-white outline-none"
+                      value={tempTarget}
+                      onChange={(e) => setTempTarget(e.target.value)}
+                      autoFocus
+                    />
+                    <button onClick={handleSaveTarget} className="p-1 bg-[#204E38] text-white rounded-md">
+                      <CheckCheck size={11} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsEditingTarget(true)}
+                    className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] px-2 py-0.5 rounded-md text-[10.5px] font-bold"
+                  >
+                    <span>Target: {monthlyTarget}</span>
+                    <Edit2 size={9} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-bold text-[#4A6455]">
+                <span>{finishedBooks.length} dari {monthlyTarget} buku selesai</span>
+                <span>{completionPercentage}%</span>
+              </div>
+              <div className="w-full bg-[#E5EDE7] h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-[#204E38] h-full rounded-full transition-all duration-500"
+                  style={{ width: `${completionPercentage}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Konten Grid Koleksi Buku */}
           {activeTab !== 'quotes' ? (
             <div className="space-y-5 flex-1 overflow-y-auto pr-1">
               <div className="space-y-3">
@@ -305,15 +397,22 @@ export default function App() {
                   <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 md:gap-4">
                     {filteredBooks.map((book) => {
                       const isFinished = book.status === 'finished';
+                      const curP = book.currentPage || 0;
+                      const totP = book.totalPages || 0;
+                      const progressPct = totP > 0 ? Math.min(Math.round((curP / totP) * 100), 100) : 0;
+                      const isEditingThisBook = editingBookId === book.id;
+
                       return (
                         <div
                           key={book.id}
                           className="bg-white rounded-[22px] md:rounded-[24px] p-3 md:p-3.5 border border-white/80 shadow-[0_8px_25px_rgba(20,45,30,0.04)] flex flex-col justify-between group hover:shadow-md transition-all"
                         >
+                          {/* Cover */}
                           <div className="w-full aspect-[4/5] bg-[#E6EFE9] rounded-[16px] overflow-hidden relative mb-2.5 shadow-inner flex items-center justify-center p-2">
                             <img
                               src={book.coverUrl || 'https://via.placeholder.com/150x225?text=No+Cover'}
                               alt={book.title}
+                              crossOrigin="anonymous"
                               className="h-full w-auto object-cover rounded-md shadow-md group-hover:scale-105 transition-transform duration-300"
                             />
                             
@@ -322,28 +421,119 @@ export default function App() {
                               className={`absolute top-2 right-2 p-1.5 rounded-full backdrop-blur-md shadow-sm transition-all ${
                                 isFinished ? 'bg-[#204E38] text-white' : 'bg-white/80 text-[#6C8476] hover:bg-white'
                               }`}
+                              title={isFinished ? 'Tandai sedang dibaca' : 'Tandai selesai'}
                             >
                               <Check size={12} strokeWidth={3} />
                             </button>
                           </div>
 
-                          <div className="space-y-0.5">
-                            <h4 className="font-bold text-xs text-[#13231B] line-clamp-1 leading-snug">{book.title}</h4>
-                            <p className="text-[11px] font-medium text-[#7C9486] line-clamp-1">{book.author}</p>
+                          {/* Info Buku & Progres Halaman */}
+                          <div className="space-y-1.5">
+                            <div className="space-y-0.5">
+                              <h4 className="font-bold text-xs text-[#13231B] line-clamp-1 leading-snug">{book.title}</h4>
+                              <p className="text-[11px] font-medium text-[#7C9486] line-clamp-1">{book.author}</p>
+                            </div>
+
+                            {/* Section Progress Tracker */}
+                            <div className="pt-1">
+                              {isEditingThisBook ? (
+                                <div className="p-2 bg-[#F4F8F5] rounded-xl border border-[#DCE5DF] space-y-1.5">
+                                  <div className="flex items-center gap-1 text-[10px]">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      placeholder="Hal"
+                                      className="w-12 px-1.5 py-0.5 rounded border border-[#204E38] text-center font-bold bg-white outline-none"
+                                      value={editCurrentPage}
+                                      onChange={(e) => setEditCurrentPage(e.target.value)}
+                                      autoFocus
+                                    />
+                                    <span className="text-slate-400">/</span>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      placeholder="Total"
+                                      className="w-12 px-1.5 py-0.5 rounded border border-slate-300 text-center font-bold bg-white outline-none"
+                                      value={editTotalPages}
+                                      onChange={(e) => setEditTotalPages(e.target.value)}
+                                    />
+                                    <button
+                                      onClick={() => handleSavePageProgress(book)}
+                                      className="p-1 bg-[#204E38] text-white rounded ml-auto hover:bg-[#153425]"
+                                      title="Simpan"
+                                    >
+                                      <CheckCheck size={11} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between text-[10px] font-semibold text-[#6C8476]">
+                                    {totP > 0 ? (
+                                      <button
+                                        onClick={() => {
+                                          setEditingBookId(book.id);
+                                          setEditCurrentPage(curP.toString());
+                                          setEditTotalPages(totP.toString());
+                                        }}
+                                        className="hover:underline flex items-center gap-1 text-[#204E38]"
+                                        title="Klik untuk ubah halaman"
+                                      >
+                                        <span>Hal {curP}/{totP}</span>
+                                        <Edit2 size={9} />
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => {
+                                          setEditingBookId(book.id);
+                                          setEditCurrentPage(curP.toString());
+                                          setEditTotalPages('');
+                                        }}
+                                        className="text-[10px] text-[#204E38] hover:underline flex items-center gap-0.5"
+                                      >
+                                        <span>+ Set Halaman</span>
+                                      </button>
+                                    )}
+                                    {totP > 0 && <span className="font-bold text-[#204E38]">{progressPct}%</span>}
+                                  </div>
+
+                                  {/* Bar Progres */}
+                                  {totP > 0 && (
+                                    <div className="w-full bg-[#E5EDE7] h-1.5 rounded-full overflow-hidden">
+                                      <div 
+                                        className="bg-[#204E38] h-full rounded-full transition-all duration-300"
+                                        style={{ width: `${progressPct}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
 
+                          {/* Footer Action */}
                           <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100">
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                               isFinished ? 'bg-[#E3EFE6] text-[#204E38]' : 'bg-[#FFF6E5] text-[#A67519]'
                             }`}>
                               {isFinished ? 'Selesai' : 'Ongoing'}
                             </span>
-                            <button
-                              onClick={() => handleDeleteBook(book.id)}
-                              className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleOpenShare(book, 'book')}
+                                title="Bagikan"
+                                className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
+                              >
+                                <Share2 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteBook(book.id)}
+                                className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -353,6 +543,7 @@ export default function App() {
               </div>
             </div>
           ) : (
+            /* Tab Kutipan */
             <div className="space-y-4">
               <div className="flex justify-between items-center px-1">
                 <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Kutipan</h3>
@@ -373,12 +564,21 @@ export default function App() {
                       </div>
                       <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
                         <span className="text-[11px] font-bold text-[#204E38]">— {q.author}</span>
-                        <button
-                          onClick={() => handleDeleteQuote(q.id)}
-                          className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleOpenShare(q, 'quote')}
+                            title="Bagikan"
+                            className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
+                          >
+                            <Share2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteQuote(q.id)}
+                            className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -388,19 +588,28 @@ export default function App() {
           )}
         </main>
 
-        {/* Panel Kanan - Reading Goals Interaktif */}
-        <aside className="hidden xl:flex flex-col w-72 space-y-6 flex-shrink-0">
+        {/* Panel Kanan (Desktop) */}
+        <aside className="hidden xl:flex flex-col w-72 space-y-5 flex-shrink-0">
           
-          <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-6 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] space-y-4">
+          {/* Target Bulanan Card */}
+          <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-5 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] space-y-3.5">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-xs text-[#13231B]">Reading Goals</h3>
-              <div className="flex items-center gap-1">
-                <TrendingUp size={15} className="text-[#204E38]" />
-              </div>
+              
+              {/* Tombol Rekap Desktop */}
+              {finishedBooks.length > 0 && (
+                <button
+                  onClick={() => setIsRecapModalOpen(true)}
+                  className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2.5 py-1 rounded-xl text-[10.5px] font-bold transition-all active:scale-95"
+                  title="Buat Rekap Bulanan"
+                >
+                  <Sparkles size={12} />
+                  <span>Rekap</span>
+                </button>
+              )}
             </div>
 
-            {/* Input Edit Target Bulan Ini */}
-            <div className="flex items-center justify-between text-xs font-bold text-[#4A6455] pt-1">
+            <div className="flex items-center justify-between text-xs font-bold text-[#4A6455] pt-0.5">
               <span>Target Bulan Ini:</span>
               {isEditingTarget ? (
                 <div className="flex items-center gap-1.5">
@@ -412,11 +621,7 @@ export default function App() {
                     onChange={(e) => setTempTarget(e.target.value)}
                     autoFocus
                   />
-                  <button
-                    onClick={handleSaveTarget}
-                    className="p-1 bg-[#204E38] text-white rounded-md hover:bg-[#153425]"
-                    title="Simpan"
-                  >
+                  <button onClick={handleSaveTarget} className="p-1 bg-[#204E38] text-white rounded-md hover:bg-[#153425]">
                     <CheckCheck size={12} />
                   </button>
                 </div>
@@ -424,7 +629,6 @@ export default function App() {
                 <button
                   onClick={() => setIsEditingTarget(true)}
                   className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] px-2 py-0.5 rounded-md hover:bg-[#DBE8DF] transition-all"
-                  title="Klik untuk ubah target"
                 >
                   <span>{monthlyTarget} Buku</span>
                   <Edit2 size={11} />
@@ -432,12 +636,12 @@ export default function App() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold text-[#4A6455]">
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-[11px] font-bold text-[#4A6455]">
                 <span>Progress</span>
                 <span>{completionPercentage}%</span>
               </div>
-              <div className="w-full bg-[#E5EDE7] h-2.5 rounded-full overflow-hidden">
+              <div className="w-full bg-[#E5EDE7] h-2 rounded-full overflow-hidden">
                 <div 
                   className="bg-[#204E38] h-full rounded-full transition-all duration-500"
                   style={{ width: `${completionPercentage}%` }}
@@ -445,27 +649,32 @@ export default function App() {
               </div>
             </div>
 
-            <div className="pt-2 text-[11px] text-[#6C8476] leading-relaxed border-t border-slate-100">
+            <div className="pt-2 text-[10.5px] text-[#6C8476] leading-relaxed border-t border-slate-100">
               <span className="font-bold text-[#13231B]">{finishedBooks.length}</span> dari {monthlyTarget} buku target bulan ini selesai dibaca.
             </div>
           </div>
 
+          {/* Reading Heatmap Card (Khusus Desktop) */}
+          <ReadingHeatmap books={books} />
+
           {/* Ongoing Book Quick List */}
-          <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-6 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] flex-1 space-y-4">
+          <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-5 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] flex-1 space-y-3">
             <h3 className="font-extrabold text-xs text-[#13231B]">Sedang Dibaca</h3>
             
             {ongoingBooks.length === 0 ? (
               <p className="text-[11px] text-[#8FA597]">Tidak ada buku yang sedang dibaca.</p>
             ) : (
-              <div className="space-y-3">
-                {ongoingBooks.slice(0, 4).map((b) => (
+              <div className="space-y-2.5">
+                {ongoingBooks.slice(0, 3).map((b) => (
                   <div key={b.id} className="flex items-center gap-3 p-2 rounded-2xl hover:bg-white transition-all">
-                    <div className="w-10 h-14 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 shadow-sm">
-                      <img src={b.coverUrl || 'https://via.placeholder.com/80x120?text=No+Cover'} alt={b.title} className="w-full h-full object-cover" />
+                    <div className="w-9 h-12 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 shadow-sm">
+                      <img src={b.coverUrl || 'https://via.placeholder.com/80x120?text=No+Cover'} alt={b.title} crossOrigin="anonymous" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h5 className="font-bold text-xs text-[#13231B] truncate">{b.title}</h5>
-                      <p className="text-[10px] text-[#7C9486] truncate">{b.author}</p>
+                      <p className="text-[10px] text-[#7C9486] truncate">
+                        {b.totalPages ? `Hal ${b.currentPage || 0} / ${b.totalPages}` : b.author}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -476,19 +685,32 @@ export default function App() {
 
       </div>
 
-      {/* Floating Navbar Khusus Mobile */}
       <BottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenAddModal={() => setIsModalOpen(true)}
       />
 
-      {/* Modal Form Tambah Data */}
       <AddModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onAddBook={handleAddBook}
         onAddQuote={handleAddQuote}
+      />
+
+      {/* Modal Share Single Card */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        data={shareData}
+        type={shareType}
+      />
+
+      {/* Modal Rekap Bulanan */}
+      <MonthlyRecapModal
+        isOpen={isRecapModalOpen}
+        onClose={() => setIsRecapModalOpen(false)}
+        finishedBooks={finishedBooks}
       />
     </div>
   );
