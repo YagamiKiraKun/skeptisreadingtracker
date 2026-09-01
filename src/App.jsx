@@ -355,7 +355,7 @@ export default function App() {
           ) : (
             <div className="space-y-4">
               <div className="flex justify-between items-center px-1">
-                <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Kutipan Inspiratif</h3>
+                <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Kutipan</h3>
                 <span className="text-xs font-bold text-[#6C8476]">{quotes.length} Quotes</span>
               </div>
 
