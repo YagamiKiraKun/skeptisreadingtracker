@@ -19,7 +19,9 @@ export default function BookDetailModal({
   onDeleteBook, 
   onToggleStatus, 
   onDeleteQuote,
+  onEditQuote,
   onDeleteNote,
+  onEditNote,
   onOpenShareQuote,
   onOpenShareBook
 }) {
@@ -122,7 +124,7 @@ export default function BookDetailModal({
           </div>
         )}
 
-        {/* Folder Switcher Rapi (Full Width Segmented Control) */}
+        {/* Folder Switcher */}
         <div className="space-y-3 pt-1 border-t border-slate-100">
           <div className="grid grid-cols-2 bg-[#F4F8F5] p-1 rounded-2xl border border-[#DCE5DF]">
             <button
@@ -176,6 +178,15 @@ export default function BookDetailModal({
                           </span>
                         ) : <span />}
                         <div className="flex items-center gap-1.5">
+                          {onEditQuote && (
+                            <button
+                              onClick={() => onEditQuote(q)}
+                              className="text-slate-400 hover:text-[#204E38] p-1"
+                              title="Edit Quote"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                          )}
                           <button
                             onClick={() => onOpenShareQuote(q)}
                             className="text-slate-400 hover:text-[#204E38] p-1"
@@ -221,15 +232,26 @@ export default function BookDetailModal({
                         <h4 className="text-xs font-extrabold text-[#13231B]">
                           {n.title || 'Catatan'}
                         </h4>
-                        {onDeleteNote && (
-                          <button
-                            onClick={() => onDeleteNote(n.id)}
-                            className="text-slate-300 hover:text-rose-500 p-0.5"
-                            title="Hapus Note"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {onEditNote && (
+                            <button
+                              onClick={() => onEditNote(n)}
+                              className="text-slate-400 hover:text-[#204E38] p-1"
+                              title="Edit Note"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                          )}
+                          {onDeleteNote && (
+                            <button
+                              onClick={() => onDeleteNote(n.id)}
+                              className="text-slate-300 hover:text-rose-500 p-1"
+                              title="Hapus Note"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-[#3A5043] leading-relaxed whitespace-pre-line font-normal">
                         {n.content}

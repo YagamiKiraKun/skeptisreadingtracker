@@ -24,6 +24,7 @@ import BottomNav from './components/BottomNav';
 import AddModal from './components/AddModal';
 import EditBookModal from './components/EditBookModal';
 import EditQuoteModal from './components/EditQuoteModal';
+import EditNoteModal from './components/EditNoteModal';
 import BookDetailModal from './components/BookDetailModal';
 import ShareModal from './components/ShareModal';
 import MonthlyRecapModal from './components/MonthlyRecapModal';
@@ -58,6 +59,7 @@ export default function App() {
   const [selectedBookForDetail, setSelectedBookForDetail] = useState(null);
   const [bookToEdit, setBookToEdit] = useState(null);
   const [quoteToEdit, setQuoteToEdit] = useState(null);
+  const [noteToEdit, setNoteToEdit] = useState(null);
 
   // State Konfirmasi Hapus
   const [deleteDialog, setDeleteDialog] = useState({
@@ -95,7 +97,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // 2. Fetch Data Realtime (Books, Quotes, Notes, Target)
+  // 2. Fetch Data Realtime
   useEffect(() => {
     if (!user) {
       setBooks([]);
@@ -210,6 +212,14 @@ export default function App() {
     }
   };
 
+  const handleUpdateQuoteData = async (quoteId, updatedFields) => {
+    try {
+      await updateDoc(doc(db, 'quotes', quoteId), updatedFields);
+    } catch (err) {
+      console.error('Gagal update quote:', err);
+    }
+  };
+
   const handleAddNote = async (noteData) => {
     if (!user) return;
     try {
@@ -223,11 +233,11 @@ export default function App() {
     }
   };
 
-  const handleUpdateQuoteData = async (quoteId, updatedFields) => {
+  const handleUpdateNoteData = async (noteId, updatedFields) => {
     try {
-      await updateDoc(doc(db, 'quotes', quoteId), updatedFields);
+      await updateDoc(doc(db, 'notes', noteId), updatedFields);
     } catch (err) {
-      console.error('Gagal update quote:', err);
+      console.error('Gagal update note:', err);
     }
   };
 
@@ -930,7 +940,16 @@ export default function App() {
         books={books}
       />
 
-      {/* Modal Detail Buku dengan Tab Folder Kutipan & Catatan */}
+      {/* Modal Edit Note */}
+      <EditNoteModal
+        isOpen={Boolean(noteToEdit)}
+        onClose={() => setNoteToEdit(null)}
+        noteData={noteToEdit}
+        onSave={handleUpdateNoteData}
+        books={books}
+      />
+
+      {/* Modal Detail Buku */}
       <BookDetailModal
         isOpen={Boolean(selectedBookForDetail)}
         onClose={() => setSelectedBookForDetail(null)}
@@ -943,10 +962,10 @@ export default function App() {
           if (bookObj) promptDeleteBook(bookObj);
         }}
         onToggleStatus={handleToggleStatus}
-        onAddQuoteToBook={handleAddQuote}
-        onAddNoteToBook={handleAddNote}
         onDeleteQuote={(quoteId) => promptDeleteQuote({ id: quoteId })}
+        onEditQuote={(q) => setQuoteToEdit(q)}
         onDeleteNote={(noteId) => promptDeleteNote(noteId)}
+        onEditNote={(n) => setNoteToEdit(n)}
         onOpenShareQuote={(q) => handleOpenShare(q, 'quote')}
         onOpenShareBook={(b) => handleOpenShare(b, 'book')}
       />
