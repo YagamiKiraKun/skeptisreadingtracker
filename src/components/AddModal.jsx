@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, BookOpen, Quote as QuoteIcon, Sparkles, Loader2 } from 'lucide-react';
+import { X, Search, BookOpen, Quote as QuoteIcon, FileText, Loader2 } from 'lucide-react';
 
-export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books = [] }) {
-  const [tab, setTab] = useState('book');
+export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, onAddNote, books = [] }) {
+  const [tab, setTab] = useState('book'); // 'book' | 'quote' | 'note'
   
   // State Form Buku
   const [title, setTitle] = useState('');
@@ -16,12 +16,16 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
   const [searching, setSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // State Form Quote + Note
+  // State Form Quote
   const [quoteText, setQuoteText] = useState('');
   const [quoteAuthor, setQuoteAuthor] = useState('');
-  const [selectedBookId, setSelectedBookId] = useState('');
+  const [selectedBookIdForQuote, setSelectedBookIdForQuote] = useState('');
   const [pageNumber, setPageNumber] = useState('');
-  const [personalNote, setPersonalNote] = useState('');
+
+  // State Form Note / Review Bebas
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteContent, setNoteContent] = useState('');
+  const [selectedBookIdForNote, setSelectedBookIdForNote] = useState('');
 
   const searchGoogleBooks = async (queryText) => {
     if (!queryText || queryText.trim().length < 2) {
@@ -100,8 +104,8 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
     onClose();
   };
 
-  const handleBookSelectionChange = (bookId) => {
-    setSelectedBookId(bookId);
+  const handleBookSelectionForQuote = (bookId) => {
+    setSelectedBookIdForQuote(bookId);
     if (bookId) {
       const selected = books.find((b) => b.id === bookId);
       if (selected && selected.author) {
@@ -114,22 +118,39 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
     e.preventDefault();
     if (!quoteText.trim()) return;
 
-    const selected = books.find((b) => b.id === selectedBookId);
+    const selected = books.find((b) => b.id === selectedBookIdForQuote);
 
     onAddQuote({
       quote: quoteText.trim(),
       author: quoteAuthor.trim() || (selected ? selected.author : 'Anonim'),
-      bookId: selectedBookId || null,
+      bookId: selectedBookIdForQuote || null,
       bookTitle: selected ? selected.title : null,
-      pageNumber: pageNumber.trim() ? parseInt(pageNumber, 10) : null,
-      personalNote: personalNote.trim() || null
+      pageNumber: pageNumber.trim() ? parseInt(pageNumber, 10) : null
     });
 
     setQuoteText('');
     setQuoteAuthor('');
-    setSelectedBookId('');
+    setSelectedBookIdForQuote('');
     setPageNumber('');
-    setPersonalNote('');
+    onClose();
+  };
+
+  const handleSubmitNote = (e) => {
+    e.preventDefault();
+    if (!noteContent.trim()) return;
+
+    const selected = books.find((b) => b.id === selectedBookIdForNote);
+
+    onAddNote({
+      title: noteTitle.trim() || 'Catatan Refleksi',
+      content: noteContent.trim(),
+      bookId: selectedBookIdForNote || null,
+      bookTitle: selected ? selected.title : null
+    });
+
+    setNoteTitle('');
+    setNoteContent('');
+    setSelectedBookIdForNote('');
     onClose();
   };
 
@@ -137,25 +158,35 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-[32px] p-6 max-w-md w-full border border-white/80 shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
         
+        {/* Switcher Tab 3 Opsi */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 bg-[#EAF2ED] p-1 rounded-2xl">
             <button
               onClick={() => setTab('book')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 tab === 'book' ? 'bg-[#204E38] text-white shadow-sm' : 'text-[#6C8476]'
               }`}
             >
-              <BookOpen size={13} />
+              <BookOpen size={12} />
               <span>Buku</span>
             </button>
             <button
               onClick={() => setTab('quote')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 tab === 'quote' ? 'bg-[#204E38] text-white shadow-sm' : 'text-[#6C8476]'
               }`}
             >
-              <QuoteIcon size={13} />
-              <span>Kutipan & Note</span>
+              <QuoteIcon size={12} />
+              <span>Kutipan</span>
+            </button>
+            <button
+              onClick={() => setTab('note')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                tab === 'note' ? 'bg-[#204E38] text-white shadow-sm' : 'text-[#6C8476]'
+              }`}
+            >
+              <FileText size={12} />
+              <span>Catatan</span>
             </button>
           </div>
 
@@ -164,14 +195,15 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
           </button>
         </div>
 
-        {tab === 'book' ? (
+        {/* TAB 1: FORM BUKU */}
+        {tab === 'book' && (
           <form onSubmit={handleSubmitBook} className="space-y-3.5 relative">
             <div className="space-y-1 relative">
               <label className="text-[11px] font-bold text-[#4A6455] flex items-center justify-between">
                 <span>Judul Buku</span>
                 {searching && (
                   <span className="text-[10px] text-[#204E38] flex items-center gap-1 font-semibold">
-                    <Loader2 size={10} className="animate-spin" /> Mencari data buku...
+                    <Loader2 size={10} className="animate-spin" /> Mencari buku...
                   </span>
                 )}
               </label>
@@ -179,7 +211,7 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
                 <Search size={14} className="text-[#8FA597]" />
                 <input
                   type="text"
-                  placeholder="Ketik judul buku (cth: Atomic Habits)..."
+                  placeholder="Ketik judul buku..."
                   className="bg-transparent text-xs font-medium w-full outline-none text-[#13231B]"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -191,14 +223,11 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
               {showDropdown && searchResults.length > 0 && (
                 <div className="absolute top-full left-0 right-0 z-30 bg-white mt-1.5 rounded-2xl shadow-2xl border border-[#DCE5DF] overflow-hidden">
                   <div className="px-3 py-2 bg-[#F4F8F5] border-b border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <Sparkles size={11} className="text-[#204E38]" />
-                      <span className="text-[10px] font-bold text-[#4A6455]">Pilih untuk Isi Otomatis</span>
-                    </div>
+                    <span className="text-[10px] font-bold text-[#4A6455]">Pilih untuk Isi Otomatis</span>
                     <button 
                       type="button" 
                       onClick={() => setShowDropdown(false)}
-                      className="text-[10px] font-bold text-slate-400 hover:text-slate-700"
+                      className="text-[10px] font-bold text-slate-400"
                     >
                       Tutup
                     </button>
@@ -208,7 +237,7 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
                       <div
                         key={idx}
                         onClick={() => handleSelectBook(item)}
-                        className="flex items-center gap-3 p-2.5 hover:bg-[#EAF2ED] cursor-pointer transition-colors"
+                        className="flex items-center gap-3 p-2.5 hover:bg-[#EAF2ED] cursor-pointer"
                       >
                         <div className="w-8 h-12 bg-[#EAF2ED] rounded flex-shrink-0 overflow-hidden shadow-sm flex items-center justify-center">
                           {item.coverUrl ? (
@@ -219,9 +248,7 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-[#13231B] truncate">{item.title}</p>
-                          <p className="text-[10px] text-[#7C9486] truncate">
-                            {item.author} {item.pageCount ? `• ${item.pageCount} Hal` : ''}
-                          </p>
+                          <p className="text-[10px] text-[#7C9486] truncate">{item.author}</p>
                         </div>
                       </div>
                     ))}
@@ -279,22 +306,25 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
 
             <button
               type="submit"
-              className="w-full py-3 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs shadow-md transition-all active:scale-95 mt-2"
+              className="w-full py-3 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs shadow-md transition-all active:scale-95"
             >
               Simpan Buku
             </button>
           </form>
-        ) : (
+        )}
+
+        {/* TAB 2: FORM KUTIPAN */}
+        {tab === 'quote' && (
           <form onSubmit={handleSubmitQuote} className="space-y-3">
             {books.length > 0 && (
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-[#4A6455]">Tautkan ke Buku</label>
                 <select
-                  value={selectedBookId}
-                  onChange={(e) => handleBookSelectionChange(e.target.value)}
+                  value={selectedBookIdForQuote}
+                  onChange={(e) => handleBookSelectionForQuote(e.target.value)}
                   className="bg-[#F4F8F5] px-3.5 py-2.5 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B]"
                 >
-                  <option value="">-- Tanpa Tautan Buku --</option>
+                  <option value="">-- Pilih Buku --</option>
                   {books.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.title} ({b.author})
@@ -305,27 +335,15 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
             )}
 
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#4A6455]">Kutipan Buku</label>
+              <label className="text-[11px] font-bold text-[#4A6455]">Teks Kutipan</label>
               <textarea
-                rows="3"
-                placeholder="Tulis kutipan penting dari buku..."
+                rows="4"
+                placeholder="Ketik kutipan kalimat dari buku..."
                 className="bg-[#F4F8F5] p-3 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B] resize-none"
                 value={quoteText}
                 onChange={(e) => setQuoteText(e.target.value)}
                 required
                 autoFocus
-              />
-            </div>
-
-            {/* Input Personal Note */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#4A6455]">Catatan / Refleksi Pribadi (Opsional)</label>
-              <textarea
-                rows="2"
-                placeholder="Apa pendapat atau pelajaranmu tentang kutipan ini?"
-                className="bg-[#F4F8F5] p-3 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B] resize-none placeholder:text-slate-400"
-                value={personalNote}
-                onChange={(e) => setPersonalNote(e.target.value)}
               />
             </div>
 
@@ -355,9 +373,63 @@ export default function AddModal({ isOpen, onClose, onAddBook, onAddQuote, books
 
             <button
               type="submit"
-              className="w-full py-3 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs shadow-md transition-all active:scale-95 mt-2"
+              className="w-full py-3 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs shadow-md transition-all active:scale-95"
             >
-              Simpan Kutipan & Catatan
+              Simpan Kutipan
+            </button>
+          </form>
+        )}
+
+        {/* TAB 3: FORM CATATAN & REVIEW */}
+        {tab === 'note' && (
+          <form onSubmit={handleSubmitNote} className="space-y-3">
+            {books.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-[#4A6455]">Tautkan ke Buku</label>
+                <select
+                  value={selectedBookIdForNote}
+                  onChange={(e) => setSelectedBookIdForNote(e.target.value)}
+                  className="bg-[#F4F8F5] px-3.5 py-2.5 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B]"
+                >
+                  <option value="">-- Pilih Buku --</option>
+                  {books.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.title} ({b.author})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-[#4A6455]">Judul / Topik Catatan</label>
+              <input
+                type="text"
+                placeholder="Misal: Review Bab 1, Kesan Pertama..."
+                className="bg-[#F4F8F5] px-3.5 py-2.5 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B]"
+                value={noteTitle}
+                onChange={(e) => setNoteTitle(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-[#4A6455]">Isi Catatan / Review Bebas</label>
+              <textarea
+                rows="5"
+                placeholder="Tulis ulasan, analisis, atau refleksi pribadimu..."
+                className="bg-[#F4F8F5] p-3 rounded-2xl border border-[#DCE5DF] text-xs font-medium w-full outline-none text-[#13231B] resize-none"
+                value={noteContent}
+                onChange={(e) => setNoteContent(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs shadow-md transition-all active:scale-95"
+            >
+              Simpan Catatan
             </button>
           </form>
         )}

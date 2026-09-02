@@ -49,6 +49,7 @@ export default function App() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [books, setBooks] = useState([]);
   const [quotes, setQuotes] = useState([]);
+  const [notes, setNotes] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -61,7 +62,7 @@ export default function App() {
   // State Konfirmasi Hapus
   const [deleteDialog, setDeleteDialog] = useState({
     isOpen: false,
-    type: 'book', // 'book' | 'quote'
+    type: 'book', // 'book' | 'quote' | 'note'
     id: null,
     title: '',
     message: ''
@@ -94,11 +95,12 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // 2. Fetch Data Realtime
+  // 2. Fetch Data Realtime (Books, Quotes, Notes, Target)
   useEffect(() => {
     if (!user) {
       setBooks([]);
       setQuotes([]);
+      setNotes([]);
       return;
     }
 
@@ -123,9 +125,15 @@ export default function App() {
       setQuotes(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     }, (error) => console.error("Error fetching quotes:", error));
 
+    const qNotes = query(collection(db, 'notes'), where('userId', '==', user.uid));
+    const unsubNotes = onSnapshot(qNotes, (snapshot) => {
+      setNotes(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    }, (error) => console.error("Error fetching notes:", error));
+
     return () => {
       unsubBooks();
       unsubQuotes();
+      unsubNotes();
     };
   }, [user]);
 
@@ -202,6 +210,19 @@ export default function App() {
     }
   };
 
+  const handleAddNote = async (noteData) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, 'notes'), {
+        ...noteData,
+        userId: user.uid,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      alert('Gagal simpan note: ' + err.message);
+    }
+  };
+
   const handleUpdateQuoteData = async (quoteId, updatedFields) => {
     try {
       await updateDoc(doc(db, 'quotes', quoteId), updatedFields);
@@ -254,18 +275,17 @@ export default function App() {
     }
   };
 
-  // Trigger modal konfirmasi hapus buku
+  // Triggers Konfirmasi Hapus
   const promptDeleteBook = (book) => {
     setDeleteDialog({
       isOpen: true,
       type: 'book',
       id: book.id,
       title: 'Hapus Buku',
-      message: `Apakah kamu yakin ingin menghapus "${book.title}" dari koleksimu? Semua data terkait buku ini akan dihapus.`
+      message: `Apakah kamu yakin ingin menghapus "${book.title}"?`
     });
   };
 
-  // Trigger modal konfirmasi hapus quote
   const promptDeleteQuote = (quote) => {
     setDeleteDialog({
       isOpen: true,
@@ -276,7 +296,17 @@ export default function App() {
     });
   };
 
-  // Eksekusi hapus setelah disetujui di modal
+  const promptDeleteNote = (noteId) => {
+    setDeleteDialog({
+      isOpen: true,
+      type: 'note',
+      id: noteId,
+      title: 'Hapus Catatan',
+      message: `Apakah kamu yakin ingin menghapus catatan ini?`
+    });
+  };
+
+  // Eksekusi Konfirmasi Hapus
   const handleConfirmDelete = async () => {
     if (!deleteDialog.id) return;
     try {
@@ -285,8 +315,10 @@ export default function App() {
         if (selectedBookForDetail?.id === deleteDialog.id) {
           setSelectedBookForDetail(null);
         }
-      } else {
+      } else if (deleteDialog.type === 'quote') {
         await deleteDoc(doc(db, 'quotes', deleteDialog.id));
+      } else if (deleteDialog.type === 'note') {
+        await deleteDoc(doc(db, 'notes', deleteDialog.id));
       }
     } catch (err) {
       console.error('Gagal menghapus data:', err);
@@ -446,7 +478,7 @@ export default function App() {
                 {finishedBooks.length > 0 && (
                   <button
                     onClick={() => setIsRecapModalOpen(true)}
-                    className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2.5 py-1 rounded-xl text-[10.5px] font-bold transition-all"
+                    className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-all"
                   >
                     <Sparkles size={11} />
                     <span>Rekap</span>
@@ -678,10 +710,10 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* Tab Kutipan & Catatan */
+            /* Tab Kutipan Global */
             <div className="space-y-4">
               <div className="flex justify-between items-center px-1">
-                <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Kutipan & Catatan</h3>
+                <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Kutipan</h3>
                 <span className="text-xs font-bold text-[#6C8476]">{quotes.length} Quotes</span>
               </div>
 
@@ -706,14 +738,6 @@ export default function App() {
                         <p className="text-xs italic text-[#25392D] font-medium leading-relaxed">
                           "{q.quote}"
                         </p>
-
-                        {/* Catatan / Refleksi Pribadi */}
-                        {q.personalNote && (
-                          <div className="bg-[#F4F8F5] p-2.5 rounded-xl border-l-2 border-[#204E38] text-[11px] text-[#3A5043] leading-relaxed">
-                            <span className="font-bold text-[#204E38] block text-[10px] mb-0.5">Catatan:</span>
-                            {q.personalNote}
-                          </div>
-                        )}
                       </div>
 
                       <div className="flex justify-between items-center pt-3 border-t border-slate-100">
@@ -886,6 +910,7 @@ export default function App() {
         onClose={() => setIsModalOpen(false)}
         onAddBook={handleAddBook}
         onAddQuote={handleAddQuote}
+        onAddNote={handleAddNote}
         books={books}
       />
 
@@ -905,11 +930,13 @@ export default function App() {
         books={books}
       />
 
+      {/* Modal Detail Buku dengan Tab Folder Kutipan & Catatan */}
       <BookDetailModal
         isOpen={Boolean(selectedBookForDetail)}
         onClose={() => setSelectedBookForDetail(null)}
         book={selectedBookForDetail}
         quotes={quotes}
+        notes={notes}
         onEditBook={(b) => setBookToEdit(b)}
         onDeleteBook={(bookId) => {
           const bookObj = books.find((b) => b.id === bookId);
@@ -917,6 +944,9 @@ export default function App() {
         }}
         onToggleStatus={handleToggleStatus}
         onAddQuoteToBook={handleAddQuote}
+        onAddNoteToBook={handleAddNote}
+        onDeleteQuote={(quoteId) => promptDeleteQuote({ id: quoteId })}
+        onDeleteNote={(noteId) => promptDeleteNote(noteId)}
         onOpenShareQuote={(q) => handleOpenShare(q, 'quote')}
         onOpenShareBook={(b) => handleOpenShare(b, 'book')}
       />
