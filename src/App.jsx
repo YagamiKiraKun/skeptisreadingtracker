@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   db, 
   auth, 
@@ -42,7 +42,10 @@ import {
   CheckCheck, 
   Share2, 
   Sparkles, 
-  Edit3 
+  Edit3,
+  Folder,
+  ArrowLeft,
+  ChevronRight
 } from 'lucide-react';
 
 export default function App() {
@@ -55,6 +58,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // State Folder Terpilih di Tab Kutipan (null = daftar folder buku)
+  const [selectedFolderTitle, setSelectedFolderTitle] = useState(null);
+
   // State Modal Detail & Edit
   const [selectedBookForDetail, setSelectedBookForDetail] = useState(null);
   const [bookToEdit, setBookToEdit] = useState(null);
@@ -64,7 +70,7 @@ export default function App() {
   // State Konfirmasi Hapus
   const [deleteDialog, setDeleteDialog] = useState({
     isOpen: false,
-    type: 'book', // 'book' | 'quote' | 'note'
+    type: 'book',
     id: null,
     title: '',
     message: ''
@@ -96,6 +102,13 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  // Reset folder view kalau tab berpindah
+  useEffect(() => {
+    if (activeTab !== 'quotes') {
+      setSelectedFolderTitle(null);
+    }
+  }, [activeTab]);
 
   // 2. Fetch Data Realtime
   useEffect(() => {
@@ -316,7 +329,6 @@ export default function App() {
     });
   };
 
-  // Eksekusi Konfirmasi Hapus
   const handleConfirmDelete = async () => {
     if (!deleteDialog.id) return;
     try {
@@ -356,6 +368,37 @@ export default function App() {
   const completionPercentage = currentTarget > 0 
     ? Math.min(Math.round((finishedBooks.length / currentTarget) * 100), 100) 
     : 0;
+
+  // Kelompokkan Quotes Berdasarkan Judul Buku untuk Folder View
+  const quoteFolders = useMemo(() => {
+    const groups = {};
+    quotes.forEach((q) => {
+      const folderKey = q.bookTitle?.trim() || 'Kutipan Bebas / Lainnya';
+      if (!groups[folderKey]) {
+        // Cari cover dari buku yang cocok jika ada
+        const matchedBook = books.find((b) => b.title?.trim() === folderKey || b.id === q.bookId);
+        groups[folderKey] = {
+          title: folderKey,
+          author: q.author || matchedBook?.author || '',
+          coverUrl: matchedBook?.coverUrl || null,
+          quotesList: []
+        };
+      }
+      groups[folderKey].quotesList.push(q);
+    });
+    return Object.values(groups);
+  }, [quotes, books]);
+
+  // Quotes yang tampil jika sebuah folder buku sedang dibuka
+  const activeFolderQuotes = useMemo(() => {
+    if (!selectedFolderTitle) return [];
+    const targetFolder = quoteFolders.find((f) => f.title === selectedFolderTitle);
+    if (!targetFolder) return [];
+    return targetFolder.quotesList.filter((q) => 
+      (q.quote || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (q.author || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [selectedFolderTitle, quoteFolders, searchQuery]);
 
   if (loadingAuth) return null;
 
@@ -408,7 +451,7 @@ export default function App() {
               <Search size={16} className="text-[#8FA597]" />
               <input
                 type="text"
-                placeholder="Cari buku atau penulis..."
+                placeholder={activeTab === 'quotes' ? "Cari teks kutipan..." : "Cari buku atau penulis..."}
                 className="bg-transparent text-xs font-medium w-full outline-none text-[#13231B] placeholder:text-[#8FA597]"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -720,70 +763,138 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* Tab Kutipan Global */
+            /* TAB KUTIPAN: MODEL FOLDER BUKU */
             <div className="space-y-4">
-              <div className="flex justify-between items-center px-1">
-                <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Kutipan</h3>
-                <span className="text-xs font-bold text-[#6C8476]">{quotes.length} Quotes</span>
-              </div>
+              {/* Jika Sedang Membuka Folder Tertentu */}
+              {selectedFolderTitle ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <button
+                      onClick={() => setSelectedFolderTitle(null)}
+                      className="flex items-center gap-2 text-xs font-bold text-[#204E38] hover:underline transition-all group"
+                    >
+                      <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
+                      <span>Kembali ke Folder</span>
+                    </button>
+                    <span className="text-xs font-bold text-[#6C8476]">
+                      {activeFolderQuotes.length} Quotes
+                    </span>
+                  </div>
 
-              {quotes.length === 0 ? (
-                <div className="bg-white/60 backdrop-blur-sm rounded-[28px] p-8 text-center border border-white">
-                  <p className="text-xs font-semibold text-[#6C8476]">Belum ada kutipan yang disimpan.</p>
+                  <div className="bg-[#F4F8F5] p-3.5 rounded-2xl border border-[#DCE5DF] flex items-center gap-2.5">
+                    <Folder size={18} className="text-[#204E38]" />
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-black text-[#13231B] truncate">{selectedFolderTitle}</h4>
+                      <p className="text-[10.5px] text-[#7C9486]">Koleksi kutipan khusus buku ini</p>
+                    </div>
+                  </div>
+
+                  {activeFolderQuotes.length === 0 ? (
+                    <div className="bg-white/60 backdrop-blur-sm rounded-[28px] p-8 text-center border border-white">
+                      <p className="text-xs font-semibold text-[#6C8476]">Tidak ada kutipan yang cocok.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {activeFolderQuotes.map((q) => (
+                        <div key={q.id} className="bg-white rounded-[24px] p-5 border border-white/80 shadow-[0_8px_25px_rgba(20,45,30,0.04)] flex flex-col justify-between gap-3">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <QuoteIcon size={18} className="text-[#204E38]/30" />
+                              {q.pageNumber && (
+                                <span className="text-[10px] font-bold bg-[#EAF2ED] text-[#204E38] px-2 py-0.5 rounded-md">
+                                  Hal. {q.pageNumber}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs italic text-[#25392D] font-medium leading-relaxed">
+                              "{q.quote}"
+                            </p>
+                          </div>
+
+                          <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                            <div>
+                              <span className="text-[11px] font-bold text-[#204E38] block">— {q.author}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setQuoteToEdit(q)}
+                                title="Edit Kutipan"
+                                className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleOpenShare(q, 'quote')}
+                                title="Bagikan"
+                                className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
+                              >
+                                <Share2 size={13} />
+                              </button>
+                              <button
+                                onClick={() => promptDeleteQuote(q)}
+                                className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {quotes.map((q) => (
-                    <div key={q.id} className="bg-white rounded-[24px] p-5 border border-white/80 shadow-[0_8px_25px_rgba(20,45,30,0.04)] flex flex-col justify-between gap-3">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <QuoteIcon size={18} className="text-[#204E38]/30" />
-                          {q.pageNumber && (
-                            <span className="text-[10px] font-bold bg-[#EAF2ED] text-[#204E38] px-2 py-0.5 rounded-md">
-                              Hal. {q.pageNumber}
-                            </span>
-                          )}
-                        </div>
-                        
-                        <p className="text-xs italic text-[#25392D] font-medium leading-relaxed">
-                          "{q.quote}"
-                        </p>
-                      </div>
+                /* Tampilan Daftar Folder Buku */
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center px-1">
+                    <h3 className="font-extrabold text-sm text-[#13231B] tracking-tight">Folder Kutipan Buku</h3>
+                    <span className="text-xs font-bold text-[#6C8476]">{quoteFolders.length} Folder Buku</span>
+                  </div>
 
-                      <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                        <div>
-                          <span className="text-[11px] font-bold text-[#204E38] block">— {q.author}</span>
-                          {q.bookTitle && (
-                            <span className="text-[10px] text-[#7C9486] font-medium block">
-                              di: {q.bookTitle}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setQuoteToEdit(q)}
-                            title="Edit Kutipan"
-                            className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button
-                            onClick={() => handleOpenShare(q, 'quote')}
-                            title="Bagikan"
-                            className="text-slate-400 hover:text-[#204E38] p-1 transition-colors"
-                          >
-                            <Share2 size={13} />
-                          </button>
-                          <button
-                            onClick={() => promptDeleteQuote(q)}
-                            className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
+                  {quoteFolders.length === 0 ? (
+                    <div className="bg-white/60 backdrop-blur-sm rounded-[28px] p-8 text-center border border-white">
+                      <p className="text-xs font-semibold text-[#6C8476]">Belum ada kutipan yang tersimpan.</p>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                      {quoteFolders.map((folder, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setSelectedFolderTitle(folder.title)}
+                          className="bg-white rounded-[24px] p-4 border border-white/80 shadow-[0_8px_25px_rgba(20,45,30,0.04)] hover:shadow-md transition-all cursor-pointer flex items-center justify-between group"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            {/* Ikon Folder / Cover Buku Kecil */}
+                            {folder.coverUrl ? (
+                              <div className="w-10 h-14 bg-[#EAF2ED] rounded-xl overflow-hidden flex-shrink-0 shadow-sm">
+                                <img src={folder.coverUrl} alt="cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                              </div>
+                            ) : (
+                              <div className="w-11 h-11 bg-[#EAF2ED] rounded-2xl flex items-center justify-center flex-shrink-0 text-[#204E38] group-hover:bg-[#204E38] group-hover:text-white transition-colors">
+                                <Folder size={20} />
+                              </div>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-extrabold text-xs text-[#13231B] truncate group-hover:text-[#204E38] transition-colors">
+                                {folder.title}
+                              </h4>
+                              {folder.author && (
+                                <p className="text-[10px] text-[#7C9486] truncate mt-0.5">
+                                  {folder.author}
+                                </p>
+                              )}
+                              <span className="inline-block text-[10px] font-bold text-[#204E38] bg-[#F4F8F5] px-2 py-0.5 rounded-md mt-1.5 border border-[#DCE5DF]">
+                                {folder.quotesList.length} Quotes
+                              </span>
+                            </div>
+                          </div>
+
+                          <ChevronRight size={16} className="text-slate-300 group-hover:text-[#204E38] group-hover:translate-x-0.5 transition-all flex-shrink-0 ml-2" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
