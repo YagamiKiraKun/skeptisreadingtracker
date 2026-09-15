@@ -3,8 +3,9 @@ import { Zap, BookOpen, Flame, Clock } from 'lucide-react';
 
 export default function ReadingPace({ books = [] }) {
   const paceData = useMemo(() => {
-    const finishedBooks = books.filter((b) => b.status === 'finished');
-    const ongoingBooks = books.filter((b) => b.status === 'reading');
+    const safeBooks = Array.isArray(books) ? books : [];
+    const finishedBooks = safeBooks.filter((b) => b.status === 'finished');
+    const ongoingBooks = safeBooks.filter((b) => b.status === 'reading');
 
     // Total halaman seluruh buku yang selesai
     const totalFinishedPages = finishedBooks.reduce((acc, b) => acc + (b.totalPages || b.currentPage || 0), 0);
@@ -16,7 +17,7 @@ export default function ReadingPace({ books = [] }) {
 
     // Hitung total hari unik aktivitas baca
     const allActivityDates = new Set();
-    books.forEach((b) => {
+    safeBooks.forEach((b) => {
       if (Array.isArray(b.activityDates)) {
         b.activityDates.forEach((d) => allActivityDates.add(d));
       }
@@ -38,7 +39,7 @@ export default function ReadingPace({ books = [] }) {
     sevenDaysAgo.setDate(today.getDate() - 7);
 
     let weeklyPages = 0;
-    books.forEach((b) => {
+    safeBooks.forEach((b) => {
       if (Array.isArray(b.activityDates)) {
         const hasRecentActivity = b.activityDates.some((dStr) => new Date(dStr) >= sevenDaysAgo);
         if (hasRecentActivity) {
@@ -47,7 +48,7 @@ export default function ReadingPace({ books = [] }) {
       }
     });
 
-    // Badge Status Ala Strava (Sudah diperbaiki dengan tanda kurung)
+    // Badge Status Ala Strava
     let badgeLabel = 'Steady Reader';
     let badgeColor = 'bg-[#EAF2ED] text-[#204E38] border-[#DCE5DF]';
 

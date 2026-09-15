@@ -512,6 +512,11 @@ export default function App() {
             </div>
           </div>
 
+          {/* Reading Pace Widget versi Mobile */}
+          <div className="block xl:hidden">
+            <ReadingPace books={books} />
+          </div>
+
           {/* Reading Goals Card Mobile */}
           <div className="block xl:hidden bg-white/80 backdrop-blur-md rounded-[24px] p-4 border border-white/80 shadow-[0_4px_20px_rgba(20,45,30,0.03)] space-y-2.5">
             <div className="flex items-center justify-between">
@@ -823,7 +828,6 @@ export default function App() {
                               )}
                             </div>
                             
-                            {/* Teks tidak lagi miring */}
                             <p className="text-xs text-[#25392D] font-medium leading-relaxed">
                               "{q.quote}"
                             </p>
@@ -1005,7 +1009,7 @@ export default function App() {
 
           <ReadingHeatmap books={books} />
 
-          {/* Widget Reading Pace Ala Strava */}
+          {/* Widget Reading Pace Ala Strava Desktop */}
           <ReadingPace books={books} />
 
           {/* Ongoing Book List */}
