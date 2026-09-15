@@ -27,14 +27,15 @@ export default function BookDetailModal({
   onOpenShareBook
 }) {
   const [activeFolderTab, setActiveFolderTab] = useState('quotes');
-  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' = kecil ke besar, 'desc' = besar ke kecil
+  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' | 'desc'
 
-  if (!isOpen || !book) return null;
+  // Safety filter sebelum di-sort
+  const rawBookQuotes = useMemo(() => {
+    if (!book) return [];
+    return quotes.filter((q) => q.bookId === book.id || q.bookTitle === book.title);
+  }, [quotes, book]);
 
-  const rawBookQuotes = quotes.filter((q) => q.bookId === book.id || q.bookTitle === book.title);
-  const bookNotes = notes.filter((n) => n.bookId === book.id || n.bookTitle === book.title);
-  
-  // Sorting Kutipan berdasarkan Halaman
+  // Sorting Kutipan berdasarkan Halaman (Dipanggil SEBELUM early return)
   const bookQuotes = useMemo(() => {
     return [...rawBookQuotes].sort((a, b) => {
       const pageA = a.pageNumber ?? Infinity;
@@ -42,6 +43,14 @@ export default function BookDetailModal({
       return sortOrder === 'asc' ? pageA - pageB : pageB - pageA;
     });
   }, [rawBookQuotes, sortOrder]);
+
+  const bookNotes = useMemo(() => {
+    if (!book) return [];
+    return notes.filter((n) => n.bookId === book.id || n.bookTitle === book.title);
+  }, [notes, book]);
+
+  // EARLY RETURN HARUS DI BAWAH SEMUA HOOKS (useState / useMemo)
+  if (!isOpen || !book) return null;
 
   const isFinished = book.status === 'finished';
   const curP = book.currentPage || 0;
@@ -191,7 +200,6 @@ export default function BookDetailModal({
                       key={q.id} 
                       className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-2"
                     >
-                      {/* Teks tidak lagi miring */}
                       <p className="text-xs text-[#25392D] font-medium leading-relaxed">
                         "{q.quote}"
                       </p>
