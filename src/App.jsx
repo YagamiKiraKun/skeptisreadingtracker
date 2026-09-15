@@ -45,7 +45,8 @@ import {
   Edit3,
   Folder,
   ArrowLeft,
-  ChevronRight
+  ChevronRight,
+  ArrowUpDown
 } from 'lucide-react';
 
 export default function App() {
@@ -58,8 +59,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // State Folder Terpilih di Tab Kutipan (null = daftar folder buku)
+  // State Folder Terpilih di Tab Kutipan & Urutan Halaman ('asc' | 'desc')
   const [selectedFolderTitle, setSelectedFolderTitle] = useState(null);
+  const [quoteSortOrder, setQuoteSortOrder] = useState('asc');
 
   // State Modal Detail & Edit
   const [selectedBookForDetail, setSelectedBookForDetail] = useState(null);
@@ -103,7 +105,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Reset folder view kalau tab berpindah
   useEffect(() => {
     if (activeTab !== 'quotes') {
       setSelectedFolderTitle(null);
@@ -298,7 +299,6 @@ export default function App() {
     }
   };
 
-  // Triggers Konfirmasi Hapus
   const promptDeleteBook = (book) => {
     setDeleteDialog({
       isOpen: true,
@@ -369,13 +369,12 @@ export default function App() {
     ? Math.min(Math.round((finishedBooks.length / currentTarget) * 100), 100) 
     : 0;
 
-  // Kelompokkan Quotes Berdasarkan Judul Buku untuk Folder View
+  // Kelompokkan Quotes ke Folder Buku
   const quoteFolders = useMemo(() => {
     const groups = {};
     quotes.forEach((q) => {
       const folderKey = q.bookTitle?.trim() || 'Kutipan Bebas / Lainnya';
       if (!groups[folderKey]) {
-        // Cari cover dari buku yang cocok jika ada
         const matchedBook = books.find((b) => b.title?.trim() === folderKey || b.id === q.bookId);
         groups[folderKey] = {
           title: folderKey,
@@ -389,16 +388,23 @@ export default function App() {
     return Object.values(groups);
   }, [quotes, books]);
 
-  // Quotes yang tampil jika sebuah folder buku sedang dibuka
+  // Quotes Terfilter & Tersortir Berdasarkan Halaman di Dalam Folder
   const activeFolderQuotes = useMemo(() => {
     if (!selectedFolderTitle) return [];
     const targetFolder = quoteFolders.find((f) => f.title === selectedFolderTitle);
     if (!targetFolder) return [];
-    return targetFolder.quotesList.filter((q) => 
+    
+    const filtered = targetFolder.quotesList.filter((q) => 
       (q.quote || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (q.author || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [selectedFolderTitle, quoteFolders, searchQuery]);
+
+    return filtered.sort((a, b) => {
+      const pageA = a.pageNumber ?? Infinity;
+      const pageB = b.pageNumber ?? Infinity;
+      return quoteSortOrder === 'asc' ? pageA - pageB : pageB - pageA;
+    });
+  }, [selectedFolderTitle, quoteFolders, searchQuery, quoteSortOrder]);
 
   if (loadingAuth) return null;
 
@@ -763,9 +769,8 @@ export default function App() {
               </div>
             </div>
           ) : (
-            /* TAB KUTIPAN: MODEL FOLDER BUKU */
+            /* TAB KUTIPAN: MODEL FOLDER BUKU + SORTING HALAMAN */
             <div className="space-y-4">
-              {/* Jika Sedang Membuka Folder Tertentu */}
               {selectedFolderTitle ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between px-1">
@@ -776,16 +781,26 @@ export default function App() {
                       <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
                       <span>Kembali ke Folder</span>
                     </button>
-                    <span className="text-xs font-bold text-[#6C8476]">
-                      {activeFolderQuotes.length} Quotes
-                    </span>
+                    
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setQuoteSortOrder(quoteSortOrder === 'asc' ? 'desc' : 'asc')}
+                        className="flex items-center gap-1.5 text-[11px] font-bold text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-3 py-1.5 rounded-xl transition-all"
+                      >
+                        <ArrowUpDown size={12} />
+                        <span>Hal: {quoteSortOrder === 'asc' ? 'Kecil → Besar' : 'Besar → Kecil'}</span>
+                      </button>
+                      <span className="text-xs font-bold text-[#6C8476]">
+                        {activeFolderQuotes.length} Quotes
+                      </span>
+                    </div>
                   </div>
 
                   <div className="bg-[#F4F8F5] p-3.5 rounded-2xl border border-[#DCE5DF] flex items-center gap-2.5">
                     <Folder size={18} className="text-[#204E38]" />
                     <div className="min-w-0">
                       <h4 className="text-xs font-black text-[#13231B] truncate">{selectedFolderTitle}</h4>
-                      <p className="text-[10.5px] text-[#7C9486]">Koleksi kutipan khusus buku ini</p>
+                      <p className="text-[10.5px] text-[#7C9486]">Urut berdasarkan nomor halaman ({quoteSortOrder === 'asc' ? 'terkecil ke terbesar' : 'terbesar ke terkecil'})</p>
                     </div>
                   </div>
 
@@ -806,7 +821,9 @@ export default function App() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs italic text-[#25392D] font-medium leading-relaxed">
+                            
+                            {/* Teks tidak lagi miring */}
+                            <p className="text-xs text-[#25392D] font-medium leading-relaxed">
                               "{q.quote}"
                             </p>
                           </div>
@@ -864,7 +881,6 @@ export default function App() {
                           className="bg-white rounded-[24px] p-4 border border-white/80 shadow-[0_8px_25px_rgba(20,45,30,0.04)] hover:shadow-md transition-all cursor-pointer flex items-center justify-between group"
                         >
                           <div className="flex items-center gap-3.5 min-w-0">
-                            {/* Ikon Folder / Cover Buku Kecil */}
                             {folder.coverUrl ? (
                               <div className="w-10 h-14 bg-[#EAF2ED] rounded-xl overflow-hidden flex-shrink-0 shadow-sm">
                                 <img src={folder.coverUrl} alt="cover" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -1042,7 +1058,6 @@ export default function App() {
         onSave={handleUpdateBookData}
       />
 
-      {/* Modal Edit Quote */}
       <EditQuoteModal
         isOpen={Boolean(quoteToEdit)}
         onClose={() => setQuoteToEdit(null)}
@@ -1051,7 +1066,6 @@ export default function App() {
         books={books}
       />
 
-      {/* Modal Edit Note */}
       <EditNoteModal
         isOpen={Boolean(noteToEdit)}
         onClose={() => setNoteToEdit(null)}
@@ -1060,7 +1074,6 @@ export default function App() {
         books={books}
       />
 
-      {/* Modal Detail Buku */}
       <BookDetailModal
         isOpen={Boolean(selectedBookForDetail)}
         onClose={() => setSelectedBookForDetail(null)}
@@ -1094,7 +1107,6 @@ export default function App() {
         finishedBooks={finishedBooks}
       />
 
-      {/* Modal Dialog Konfirmasi Hapus */}
       <DeleteConfirmModal
         isOpen={deleteDialog.isOpen}
         onClose={() => setDeleteDialog((prev) => ({ ...prev, isOpen: false }))}

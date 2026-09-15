@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   X, 
   Edit3, 
@@ -6,7 +6,8 @@ import {
   Quote as QuoteIcon, 
   FileText, 
   Share2, 
-  Check 
+  Check,
+  ArrowUpDown
 } from 'lucide-react';
 
 export default function BookDetailModal({ 
@@ -25,13 +26,23 @@ export default function BookDetailModal({
   onOpenShareQuote,
   onOpenShareBook
 }) {
-  const [activeFolderTab, setActiveFolderTab] = useState('quotes'); // 'quotes' | 'notes'
+  const [activeFolderTab, setActiveFolderTab] = useState('quotes');
+  const [sortOrder, setSortOrder] = useState('asc'); // 'asc' = kecil ke besar, 'desc' = besar ke kecil
 
   if (!isOpen || !book) return null;
 
-  const bookQuotes = quotes.filter((q) => q.bookId === book.id || q.bookTitle === book.title);
+  const rawBookQuotes = quotes.filter((q) => q.bookId === book.id || q.bookTitle === book.title);
   const bookNotes = notes.filter((n) => n.bookId === book.id || n.bookTitle === book.title);
   
+  // Sorting Kutipan berdasarkan Halaman
+  const bookQuotes = useMemo(() => {
+    return [...rawBookQuotes].sort((a, b) => {
+      const pageA = a.pageNumber ?? Infinity;
+      const pageB = b.pageNumber ?? Infinity;
+      return sortOrder === 'asc' ? pageA - pageB : pageB - pageA;
+    });
+  }, [rawBookQuotes, sortOrder]);
+
   const isFinished = book.status === 'finished';
   const curP = book.currentPage || 0;
   const totP = book.totalPages || 0;
@@ -155,6 +166,18 @@ export default function BookDetailModal({
           {/* TAB 1: KUTIPAN */}
           {activeFolderTab === 'quotes' && (
             <div className="space-y-2.5">
+              {bookQuotes.length > 0 && (
+                <div className="flex justify-end px-1">
+                  <button
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    className="flex items-center gap-1 text-[10.5px] font-bold text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2.5 py-1 rounded-xl transition-all"
+                  >
+                    <ArrowUpDown size={11} />
+                    <span>Hal: {sortOrder === 'asc' ? 'Kecil → Besar' : 'Besar → Kecil'}</span>
+                  </button>
+                </div>
+              )}
+
               {bookQuotes.length === 0 ? (
                 <div className="py-6 text-center bg-[#F4F8F5]/60 rounded-2xl border border-dashed border-[#DCE5DF]">
                   <p className="text-xs font-medium text-[#7C9486]">
@@ -166,9 +189,10 @@ export default function BookDetailModal({
                   {bookQuotes.map((q) => (
                     <div 
                       key={q.id} 
-                      className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-2"
+                      className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm flex flex-col gap-2"
                     >
-                      <p className="text-xs italic text-[#25392D] font-medium leading-relaxed">
+                      {/* Teks tidak lagi miring */}
+                      <p className="text-xs text-[#25392D] font-medium leading-relaxed">
                         "{q.quote}"
                       </p>
                       <div className="flex justify-between items-center pt-1 border-t border-slate-50 text-[10px] text-[#7C9486]">
