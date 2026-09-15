@@ -29,8 +29,9 @@ import BookDetailModal from './components/BookDetailModal';
 import ShareModal from './components/ShareModal';
 import MonthlyRecapModal from './components/MonthlyRecapModal';
 import ReadingHeatmap from './components/ReadingHeatmap';
-import ReadingPace from './components/ReadingPace';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
+import SerendipityModal from './components/SerendipityModal';
+
 import { 
   Search, 
   Plus, 
@@ -42,12 +43,12 @@ import {
   Edit2, 
   CheckCheck, 
   Share2, 
-  Sparkles, 
   Edit3,
   Folder,
   ArrowLeft,
   ChevronRight,
-  ArrowUpDown
+  ArrowUpDown,
+  Shuffle
 } from 'lucide-react';
 
 export default function App() {
@@ -59,6 +60,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // State Serendipity Modal (Random Quote/Book)
+  const [isSerendipityOpen, setIsSerendipityOpen] = useState(false);
 
   // State Folder Terpilih di Tab Kutipan & Urutan Halaman ('asc' | 'desc')
   const [selectedFolderTitle, setSelectedFolderTitle] = useState(null);
@@ -154,10 +158,54 @@ export default function App() {
     };
   }, [user]);
 
+  // Kalkulasi Reading Pace (Clean & Minimalist Text)
+  const paceStats = useMemo(() => {
+    const finishedBooksList = books.filter((b) => b.status === 'finished');
+    const ongoingBooksList = books.filter((b) => b.status === 'reading');
+
+    const totalFinishedPages = finishedBooksList.reduce((acc, b) => acc + (b.totalPages || b.currentPage || 0), 0);
+    const totalOngoingPages = ongoingBooksList.reduce((acc, b) => acc + (b.currentPage || 0), 0);
+    const grandTotalPages = totalFinishedPages + totalOngoingPages;
+
+    const allActivityDates = new Set();
+    books.forEach((b) => {
+      if (Array.isArray(b.activityDates)) {
+        b.activityDates.forEach((d) => allActivityDates.add(d));
+      }
+    });
+
+    const activeDaysCount = Math.max(allActivityDates.size, 1);
+    const avgPagesPerDay = Math.round(grandTotalPages / activeDaysCount);
+    const avgDaysPerBook = finishedBooksList.length > 0 
+      ? (activeDaysCount / finishedBooksList.length).toFixed(1) 
+      : 0;
+
+    let badgeLabel = 'STEADY READER';
+    let badgeColor = 'bg-[#EAF2ED] text-[#204E38] border-[#DCE5DF]';
+
+    if (avgPagesPerDay >= 30 || (avgDaysPerBook <= 3 && finishedBooksList.length > 0)) {
+      badgeLabel = 'FAST PACE';
+      badgeColor = 'bg-[#EAF2ED] text-[#204E38] border-[#DCE5DF]';
+    } else if (avgPagesPerDay >= 15) {
+      badgeLabel = 'STEADY READER';
+      badgeColor = 'bg-[#EAF2ED] text-[#204E38] border-[#DCE5DF]';
+    } else {
+      badgeLabel = 'DEEP DIVER';
+      badgeColor = 'bg-[#EAF2ED] text-[#204E38] border-[#DCE5DF]';
+    }
+
+    return {
+      avgPagesPerDay,
+      avgDaysPerBook,
+      badgeLabel,
+      badgeColor
+    };
+  }, [books]);
+
   const handleSaveTarget = async () => {
     const targetNum = parseInt(tempTarget, 10);
     if (isNaN(targetNum) || targetNum <= 0) return;
-    
+
     const updateObj = { targetType };
     if (targetType === 'monthly') {
       setMonthlyTarget(targetNum);
@@ -280,7 +328,7 @@ export default function App() {
     const totP = parseInt(editTotalPages, 10) || (book.totalPages || 0);
     const todayStr = new Date().toISOString().split('T')[0];
     const dates = book.activityDates ? [...new Set([...book.activityDates, todayStr])] : [todayStr];
-    
+
     const isNowFinished = totP > 0 && curP >= totP;
     const updatedFields = {
       currentPage: curP,
@@ -394,7 +442,7 @@ export default function App() {
     if (!selectedFolderTitle) return [];
     const targetFolder = quoteFolders.find((f) => f.title === selectedFolderTitle);
     if (!targetFolder) return [];
-    
+
     const filtered = targetFolder.quotesList.filter((q) => 
       (q.quote || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (q.author || '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -440,7 +488,7 @@ export default function App() {
   return (
     <div className="min-h-screen w-full bg-[#E9EFEA] p-3 md:p-6 lg:p-8 flex justify-center items-stretch pb-24 lg:pb-8">
       <div className="w-full max-w-[1400px] flex gap-6">
-        
+
         {/* Sidebar Kiri */}
         <Sidebar
           activeTab={activeTab}
@@ -451,7 +499,7 @@ export default function App() {
 
         {/* Konten Utama */}
         <main className="flex-1 flex flex-col gap-4 md:gap-5 overflow-hidden">
-          
+
           {/* Header */}
           <header className="flex items-center justify-between gap-3 bg-white/70 backdrop-blur-md px-4 py-3 md:px-6 md:py-4 rounded-[24px] md:rounded-[28px] border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)]">
             <div className="flex-1 flex items-center gap-2.5 bg-[#F4F8F5] px-3.5 py-2 md:px-4 md:py-2.5 rounded-2xl border border-[#DCE5DF] max-w-md">
@@ -465,7 +513,17 @@ export default function App() {
               />
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              {/* Tombol Serendipity Reader (Random Quote) */}
+              <button 
+                onClick={() => setIsSerendipityOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-[#EAF2ED] hover:bg-[#DBE8DF] text-[#204E38] text-xs font-bold rounded-2xl transition-all active:scale-95 border border-[#DCE5DF]"
+                title="Serendipity Reader (Acak Quote/Buku)"
+              >
+                <Shuffle size={14} />
+                <span className="hidden sm:inline">Random Quote</span>
+              </button>
+
               <button 
                 onClick={() => setIsModalOpen(true)}
                 className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-[#204E38] hover:bg-[#153425] text-white text-xs font-bold rounded-2xl shadow-md shadow-[#204E38]/20 transition-all active:scale-95"
@@ -512,12 +570,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Reading Pace Widget versi Mobile */}
-          <div className="block xl:hidden">
-            <ReadingPace books={books} />
-          </div>
-
-          {/* Reading Goals Card Mobile */}
+          {/* Reading Goals Card Mobile (Clean Human Style) */}
           <div className="block xl:hidden bg-white/80 backdrop-blur-md rounded-[24px] p-4 border border-white/80 shadow-[0_4px_20px_rgba(20,45,30,0.03)] space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1 bg-[#EAF2ED] p-0.5 rounded-xl">
@@ -545,7 +598,6 @@ export default function App() {
                     onClick={() => setIsRecapModalOpen(true)}
                     className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-all"
                   >
-                    <Sparkles size={11} />
                     <span>Rekap</span>
                   </button>
                 )}
@@ -591,6 +643,18 @@ export default function App() {
                 />
               </div>
             </div>
+
+            {/* Reading Pace Minimalist Text Bar */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[9.5px]">
+              <span className={`font-black tracking-wider px-2 py-0.5 rounded-md border ${paceStats.badgeColor}`}>
+                {paceStats.badgeLabel}
+              </span>
+              <div className="flex items-center gap-2 text-[#6C8476] font-medium tracking-tight">
+                <span>{paceStats.avgPagesPerDay} hal/hari</span>
+                <span>•</span>
+                <span>{paceStats.avgDaysPerBook > 0 ? `${paceStats.avgDaysPerBook} hari/buku` : '-'}</span>
+              </div>
+            </div>
           </div>
 
           {/* Konten Grid Koleksi Buku */}
@@ -633,7 +697,7 @@ export default function App() {
                               crossOrigin="anonymous"
                               className="h-full w-auto object-cover rounded-md shadow-md group-hover:scale-105 transition-transform duration-300"
                             />
-                            
+
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -743,7 +807,7 @@ export default function App() {
                             }`}>
                               {isFinished ? 'Selesai' : 'Ongoing'}
                             </span>
-                            
+
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => setBookToEdit(book)}
@@ -787,7 +851,7 @@ export default function App() {
                       <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
                       <span>Kembali ke Folder</span>
                     </button>
-                    
+
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => setQuoteSortOrder(quoteSortOrder === 'asc' ? 'desc' : 'asc')}
@@ -827,7 +891,7 @@ export default function App() {
                                 </span>
                               )}
                             </div>
-                            
+
                             <p className="text-xs text-[#25392D] font-medium leading-relaxed">
                               "{q.quote}"
                             </p>
@@ -924,8 +988,8 @@ export default function App() {
 
         {/* Panel Kanan (Desktop) */}
         <aside className="hidden xl:flex flex-col w-72 space-y-5 flex-shrink-0">
-          
-          {/* Target Card Desktop */}
+
+          {/* Target Card Desktop (Minimalist Text Pace Strip) */}
           <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-5 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] space-y-3.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1 bg-[#EAF2ED] p-0.5 rounded-xl">
@@ -946,14 +1010,13 @@ export default function App() {
                   Tahunan
                 </button>
               </div>
-              
+
               {finishedBooks.length > 0 && (
                 <button
                   onClick={() => setIsRecapModalOpen(true)}
                   className="flex items-center gap-1 text-[#204E38] bg-[#EAF2ED] hover:bg-[#DBE8DF] px-2.5 py-1 rounded-xl text-[10.5px] font-bold transition-all active:scale-95"
                   title="Buat Rekap Bulanan"
                 >
-                  <Sparkles size={12} />
                   <span>Rekap</span>
                 </button>
               )}
@@ -991,7 +1054,7 @@ export default function App() {
 
             <div className="space-y-1.5">
               <div className="flex justify-between text-[11px] font-bold text-[#4A6455]">
-                <span>Progress</span>
+                <span>Progress Target</span>
                 <span>{completionPercentage}%</span>
               </div>
               <div className="w-full bg-[#E5EDE7] h-2 rounded-full overflow-hidden">
@@ -1002,20 +1065,29 @@ export default function App() {
               </div>
             </div>
 
-            <div className="pt-2 text-[10.5px] text-[#6C8476] leading-relaxed border-t border-slate-100">
-              <span className="font-bold text-[#13231B]">{finishedBooks.length}</span> dari {currentTarget} buku target selesai dibaca.
+            {/* INTEGRASI COMPACT STRIP READING PACE (MINIMALIST TEXT) */}
+            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-1 text-[9.5px]">
+              <span className={`font-black tracking-wider px-2 py-0.5 rounded-md border ${paceStats.badgeColor}`}>
+                {paceStats.badgeLabel}
+              </span>
+              <div className="flex items-center gap-2 text-[#6C8476] font-medium tracking-tight">
+                <span title="Rata-rata Halaman per Hari">
+                  {paceStats.avgPagesPerDay} hal/hari
+                </span>
+                <span>•</span>
+                <span title="Estimasi Hari Menamatkan Buku">
+                  {paceStats.avgDaysPerBook > 0 ? `${paceStats.avgDaysPerBook} hari/buku` : '-'}
+                </span>
+              </div>
             </div>
           </div>
 
           <ReadingHeatmap books={books} />
 
-          {/* Widget Reading Pace Ala Strava Desktop */}
-          <ReadingPace books={books} />
-
           {/* Ongoing Book List */}
           <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-5 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] flex-1 space-y-3">
             <h3 className="font-extrabold text-xs text-[#13231B]">Sedang Dibaca</h3>
-            
+
             {ongoingBooks.length === 0 ? (
               <p className="text-[11px] text-[#8FA597]">Tidak ada buku yang sedang dibaca.</p>
             ) : (
@@ -1121,6 +1193,16 @@ export default function App() {
         onConfirm={handleConfirmDelete}
         title={deleteDialog.title}
         message={deleteDialog.message}
+      />
+
+      {/* Serendipity Reader Modal */}
+      <SerendipityModal
+        isOpen={isSerendipityOpen}
+        onClose={() => setIsSerendipityOpen(false)}
+        quotes={quotes}
+        books={books}
+        onOpenShare={handleOpenShare}
+        onSelectBook={(book) => setSelectedBookForDetail(book)}
       />
     </div>
   );
