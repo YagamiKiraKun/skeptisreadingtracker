@@ -18,21 +18,34 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
     if (!cardRef.current) return;
     setDownloading(true);
     try {
-      // Warm-up & render ke PNG resolusi tinggi (pixelRatio 2)
-      await htmlToImage.toPng(cardRef.current, { quality: 0.95, pixelRatio: 2 });
-      const dataUrl = await htmlToImage.toPng(cardRef.current, { quality: 0.95, pixelRatio: 2 });
+      // Opsi Render HD: Pixel Ratio 4x untuk output gambar kristal & super tajam
+      const renderOptions = {
+        quality: 1.0,
+        pixelRatio: 4,
+        cacheBust: true,
+        style: {
+          transform: 'scale(1)',
+          transformOrigin: 'top left',
+        },
+      };
+
+      // Warm-up render pertama (menghindari font/gambar hilang di mobile Safari)
+      await htmlToImage.toPng(cardRef.current, renderOptions);
+      
+      // Render final HD
+      const dataUrl = await htmlToImage.toPng(cardRef.current, renderOptions);
       
       setGeneratedImage(dataUrl);
 
-      // Coba trigger download otomatis lewat elemen <a>
+      // Trigger download file PNG HD
       const link = document.createElement('a');
-      link.download = `minor-notes-${type}-${Date.now()}.png`;
+      link.download = `minor-notes-hd-${type}-${Date.now()}.png`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     } catch (err) {
-      console.error('Gagal memproses gambar:', err);
+      console.error('Gagal memproses gambar HD:', err);
       alert('Gagal memproses gambar. Silakan coba lagi.');
     } finally {
       setDownloading(false);
@@ -62,7 +75,7 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
         
         {/* Header Modal */}
         <div className="flex items-center justify-between w-full">
-          <span className="text-xs font-bold text-[#204E38]">Simpan Visual Story</span>
+          <span className="text-xs font-bold text-[#204E38]">Simpan Visual Story (HD)</span>
           <button 
             onClick={handleCloseModal} 
             className="p-1.5 rounded-full text-slate-400 hover:text-slate-700"
@@ -71,7 +84,7 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
           </button>
         </div>
 
-        {/* Canvas Visual Card 9:16 (Clean Minimalist Editorial) */}
+        {/* Canvas Visual Card 9:16 (Clean Minimalist Editorial Style) */}
         <div className="w-full flex justify-center">
           <div
             ref={cardRef}
@@ -147,11 +160,11 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
         {generatedImage && (
           <div className="w-full p-3.5 bg-[#F4F8F5] rounded-2xl border border-[#DCE5DF] space-y-2 text-center animate-in fade-in duration-200">
             <p className="text-[10.5px] font-bold text-[#204E38] leading-tight">
-              Jika unduhan tidak mulai otomatis, tekan & tahan gambar di bawah lalu pilih "Simpan Gambar":
+              Gambar HD berhasil dibuat! Jika tidak langsung terunduh, tekan & tahan gambar di bawah lalu pilih "Simpan Gambar":
             </p>
             <img 
               src={generatedImage} 
-              alt="Hasil Render Visual" 
+              alt="Hasil Render Visual HD" 
               className="w-36 mx-auto rounded-xl shadow-md border border-slate-200"
             />
           </div>
@@ -173,7 +186,7 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
             className="py-2.5 px-3 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-[#204E38]/20 transition-all active:scale-95 disabled:opacity-50"
           >
             {downloading ? <ImageIcon size={14} className="animate-spin" /> : <Download size={14} />}
-            <span>{downloading ? 'Memproses...' : 'Simpan Gambar'}</span>
+            <span>{downloading ? 'Render HD...' : 'Simpan Gambar (HD)'}</span>
           </button>
         </div>
 

@@ -29,6 +29,7 @@ import BookDetailModal from './components/BookDetailModal';
 import ShareModal from './components/ShareModal';
 import MonthlyRecapModal from './components/MonthlyRecapModal';
 import ReadingHeatmap from './components/ReadingHeatmap';
+import ReadingPace from './components/ReadingPace';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
 import { 
   Search, 
@@ -1003,6 +1004,9 @@ export default function App() {
           </div>
 
           <ReadingHeatmap books={books} />
+
+          {/* Widget Reading Pace Ala Strava */}
+          <ReadingPace books={books} />
 
           {/* Ongoing Book List */}
           <div className="bg-white/70 backdrop-blur-md rounded-[32px] p-5 border border-white/60 shadow-[0_10px_30px_rgba(20,45,30,0.03)] flex-1 space-y-3">
