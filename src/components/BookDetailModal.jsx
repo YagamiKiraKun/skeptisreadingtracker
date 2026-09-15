@@ -294,7 +294,7 @@ export default function BookDetailModal({
               )}
             </div>
           )}
-
+ 
         </div>
 
       </div>

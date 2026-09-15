@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { X, Download, Share2, Quote as QuoteIcon, Check } from 'lucide-react';
+import { X, Download, Share2, Quote as QuoteIcon, Check, Image as ImageIcon } from 'lucide-react';
 import * as htmlToImage from 'html-to-image';
 import { auth } from '../firebase';
 
@@ -7,25 +7,33 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
   const cardRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState(null);
 
   if (!isOpen || !data) return null;
 
-  // Ambil nama pengguna dari akun Google (Display Name)
   const currentUser = auth.currentUser;
   const userName = currentUser?.displayName || 'Pengguna';
 
-  const handleDownloadImage = async () => {
+  const handleDownload = async () => {
     if (!cardRef.current) return;
     setDownloading(true);
     try {
+      // Warm-up & render ke PNG resolusi tinggi (pixelRatio 2)
+      await htmlToImage.toPng(cardRef.current, { quality: 0.95, pixelRatio: 2 });
       const dataUrl = await htmlToImage.toPng(cardRef.current, { quality: 0.95, pixelRatio: 2 });
+      
+      setGeneratedImage(dataUrl);
+
+      // Coba trigger download otomatis lewat elemen <a>
       const link = document.createElement('a');
       link.download = `minor-notes-${type}-${Date.now()}.png`;
       link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     } catch (err) {
-      console.error('Gagal mengunduh gambar:', err);
-      alert('Gagal mengunduh gambar. Silakan coba lagi.');
+      console.error('Gagal memproses gambar:', err);
+      alert('Gagal memproses gambar. Silakan coba lagi.');
     } finally {
       setDownloading(false);
     }
@@ -43,25 +51,33 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCloseModal = () => {
+    setGeneratedImage(null);
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-white rounded-[32px] p-6 max-w-sm w-full border border-white/80 shadow-2xl flex flex-col items-center gap-5 max-h-[95vh] overflow-y-auto">
+      <div className="bg-white rounded-[32px] p-6 max-w-sm w-full border border-white/80 shadow-2xl flex flex-col items-center gap-4 max-h-[95vh] overflow-y-auto">
         
         {/* Header Modal */}
         <div className="flex items-center justify-between w-full">
-          <span className="text-xs font-bold text-[#204E38]">Bagikan Visual Story</span>
-          <button onClick={onClose} className="p-1.5 rounded-full text-slate-400 hover:text-slate-700">
+          <span className="text-xs font-bold text-[#204E38]">Simpan Visual Story</span>
+          <button 
+            onClick={handleCloseModal} 
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700"
+          >
             <X size={18} />
           </button>
         </div>
 
-        {/* Canvas Visual Card 9:16 — Clean Minimalist Editorial Style */}
+        {/* Canvas Visual Card 9:16 (Clean Minimalist Editorial) */}
         <div className="w-full flex justify-center">
           <div
             ref={cardRef}
-            className="w-[270px] h-[480px] bg-[#86A789] rounded-[28px] p-6 text-white flex flex-col justify-between shadow-lg relative overflow-hidden"
+            className="w-[270px] h-[480px] bg-[#86A789] rounded-[28px] p-6 text-white flex flex-col justify-between shadow-lg relative overflow-hidden flex-shrink-0"
           >
-            {/* Subtle Inner Frame Line */}
+            {/* Inner Frame Line */}
             <div className="absolute inset-3 border border-white/20 rounded-[22px] pointer-events-none" />
 
             {/* Header Canvas */}
@@ -73,22 +89,19 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
                 </span>
               </div>
               
-              {/* Nama Pengguna Akun Google */}
               <span className="text-[9px] font-semibold text-white bg-white/15 px-2.5 py-0.5 rounded-full backdrop-blur-sm tracking-wide">
                 {userName}
               </span>
             </div>
 
-            {/* Main Content (Minimalist Editorial Layout) */}
+            {/* Main Content */}
             <div className="my-auto py-2 z-10 flex flex-col justify-center items-center text-center px-1">
               {type === 'quote' ? (
                 <div className="space-y-5 w-full relative">
-                  {/* Decorative Big Subtle Quote Mark */}
                   <span className="absolute -top-6 left-0 text-4xl font-serif text-white/10 select-none pointer-events-none leading-none">
                     “
                   </span>
                   
-                  {/* Teks Quote Justify / Rata Kanan Kiri */}
                   <p className="text-[11.5px] font-medium leading-relaxed text-white text-justify tracking-tight px-1 relative z-10">
                     "{data.quote}"
                   </p>
@@ -120,7 +133,7 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
               )}
             </div>
 
-            {/* Footer Canvas: Link Vercel & Judul Aplikasi Bacaan */}
+            {/* Footer Canvas */}
             <div className="pb-1 px-1 border-t border-white/20 pt-2.5 flex justify-between items-end z-10 text-[9px] text-white/90">
               <div>
                 <p className="font-bold text-white leading-none">Aplikasi Bacaan</p>
@@ -129,6 +142,20 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
             </div>
           </div>
         </div>
+
+        {/* Fallback Image Preview jika di HP Safari terblokir auto-download */}
+        {generatedImage && (
+          <div className="w-full p-3.5 bg-[#F4F8F5] rounded-2xl border border-[#DCE5DF] space-y-2 text-center animate-in fade-in duration-200">
+            <p className="text-[10.5px] font-bold text-[#204E38] leading-tight">
+              Jika unduhan tidak mulai otomatis, tekan & tahan gambar di bawah lalu pilih "Simpan Gambar":
+            </p>
+            <img 
+              src={generatedImage} 
+              alt="Hasil Render Visual" 
+              className="w-36 mx-auto rounded-xl shadow-md border border-slate-200"
+            />
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-3 w-full pt-1">
@@ -141,12 +168,12 @@ export default function ShareModal({ isOpen, onClose, data, type = 'book' }) {
           </button>
 
           <button
-            onClick={handleDownloadImage}
+            onClick={handleDownload}
             disabled={downloading}
             className="py-2.5 px-3 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-[#204E38]/20 transition-all active:scale-95 disabled:opacity-50"
           >
-            <Download size={14} />
-            <span>{downloading ? 'Proses...' : 'Unduh Story'}</span>
+            {downloading ? <ImageIcon size={14} className="animate-spin" /> : <Download size={14} />}
+            <span>{downloading ? 'Memproses...' : 'Simpan Gambar'}</span>
           </button>
         </div>
 
