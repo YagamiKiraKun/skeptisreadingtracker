@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { X, Download, Copy, Check, Sparkles } from 'lucide-react';
+import { X, Download, Copy, Check, Sparkles, Quote } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
 export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
@@ -29,16 +29,16 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
         scale: 3, // Kualitas HD 3x
         useCORS: true,
         allowTaint: true,
-        backgroundColor: null, // Mencegah kanvas luar menimpa kurva
+        backgroundColor: '#F4F7F4',
+        logging: false,
       });
 
       const image = canvas.toDataURL('image/png');
       setGeneratedImage(image);
 
-      // Trik auto-download untuk PC
       const link = document.createElement('a');
       link.href = image;
-      link.download = `minor-notes-card-${type}-${Date.now()}.png`;
+      link.download = `minor-notes-quote-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -55,15 +55,22 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
     onClose();
   };
 
+  // Penyesuaian ukuran font dinamis berdasarkan panjang kutipan agar porsi visual tetap seimbang
+  const getQuoteFontSize = (text = '') => {
+    if (text.length > 250) return 'text-xs leading-relaxed';
+    if (text.length > 120) return 'text-sm leading-relaxed';
+    return 'text-base leading-relaxed';
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-white rounded-[28px] p-6 max-w-md w-full border border-white/80 shadow-2xl flex flex-col items-center gap-4 max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-[28px] p-5 max-w-sm w-full border border-white/80 shadow-2xl flex flex-col items-center gap-4 max-h-[92vh] overflow-y-auto">
         
         {/* Header Modal */}
         <div className="flex items-center justify-between w-full px-1">
           <div className="flex items-center gap-1.5 text-[#204E38]">
             <Sparkles size={15} />
-            <span className="text-xs font-black tracking-tight">Editorial Card (4:3)</span>
+            <span className="text-xs font-black tracking-tight">Quote Card (9:16 Story)</span>
           </div>
           <button 
             onClick={handleCloseModal} 
@@ -73,19 +80,19 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
           </button>
         </div>
 
-        {/* Canvas 4:3 Editorial Design (Fix Overflow Clipping & Smooth Border Radius) */}
+        {/* Canvas Story Format (Flexible Dynamic Height to Prevent Any Text Clipping) */}
         <div className="w-full flex justify-center">
           <div
             ref={cardRef}
-            className="w-full aspect-[4/3] bg-[#F4F7F4] rounded-[24px] overflow-hidden p-6 md:p-7 flex flex-col justify-between relative select-none border border-slate-200/80"
+            className="w-[320px] min-h-[520px] bg-[#F4F7F4] rounded-[24px] p-6 flex flex-col justify-between relative select-none border border-slate-200/80 overflow-hidden shrink-0 gap-6"
           >
-            {/* Ornaments: Watermark Kutipan Raksasa (Dikunci didalam overflow-hidden agar html2canvas tidak terdistorsi) */}
-            <div className="absolute right-0 bottom-0 text-[#86A789]/20 text-[140px] font-serif font-black leading-none pointer-events-none select-none translate-x-2 translate-y-6">
+            {/* Watermark Ornamen Tanda Petik Raksasa di Background */}
+            <div className="absolute -right-3 -bottom-8 text-[#86A789]/15 text-[200px] font-serif font-black leading-none pointer-events-none select-none">
               ”
             </div>
 
             {/* Header Canvas */}
-            <div className="flex justify-between items-center z-10">
+            <div className="flex justify-between items-center z-10 shrink-0">
               <span className="text-[10px] font-black tracking-widest uppercase text-[#204E38]">
                 MINOR NOTES
               </span>
@@ -94,20 +101,35 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
               </span>
             </div>
 
-            {/* Floating White Card Overlay (Kelengkungan Soft Presisi) */}
-            <div className="my-auto z-10 bg-white/95 backdrop-blur-sm rounded-[18px] p-5 shadow-[0_4px_16px_rgba(32,78,56,0.06)] border border-white flex flex-col justify-center min-h-[130px]">
+            {/* Dynamic White Card Overlay (Auto Heights & Justified Text) */}
+            <div className="z-10 bg-white/95 backdrop-blur-sm rounded-[20px] p-5 shadow-[0_6px_20px_rgba(32,78,56,0.05)] border border-white flex flex-col justify-between space-y-4 my-auto">
               {type === 'quote' ? (
-                <div className="space-y-2">
-                  <p className="text-xs md:text-sm font-bold text-[#13231B] leading-relaxed text-justify tracking-tight">
+                <div className="space-y-3">
+                  <div className="w-7 h-7 rounded-full bg-[#EAF2ED] flex items-center justify-center text-[#204E38] shrink-0">
+                    <Quote size={13} className="fill-[#204E38]" />
+                  </div>
+
+                  {/* Teks Kutipan: Normal Font (Not Italic), Justified, Dynamic Font Size */}
+                  <p className={`font-semibold text-[#13231B] text-justify tracking-normal not-italic ${getQuoteFontSize(data.quote)}`}>
                     "{data.quote}"
                   </p>
-                  <p className="text-[11px] font-medium text-[#4A6455] pt-1">
-                    {data.bookTitle ? `Dari buku ${data.bookTitle}` : 'Catatan Refleksi'}
-                  </p>
+
+                  {/* Author & Detail Buku */}
+                  <div className="pt-2.5 border-t border-slate-100 space-y-0.5">
+                    <p className="text-xs font-black text-[#204E38]">
+                      — {data.author}
+                    </p>
+                    {data.bookTitle && (
+                      <p className="text-[10.5px] font-medium text-[#6C8476] leading-snug">
+                        Dari buku <span className="font-bold text-[#2A4335]">{data.bookTitle}</span>
+                        {data.pageNumber ? ` (Hal. ${data.pageNumber})` : ''}
+                      </p>
+                    )}
+                  </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-4">
-                  <div className="w-16 aspect-[3/4.5] bg-[#E6EFE9] rounded-lg overflow-hidden flex-shrink-0 border border-slate-200">
+                <div className="flex flex-col items-center text-center space-y-3 py-1">
+                  <div className="w-20 aspect-[3/4.2] bg-[#E6EFE9] rounded-lg overflow-hidden border border-slate-200 shadow-sm shrink-0">
                     <img
                       src={data.coverUrl || 'https://via.placeholder.com/150x225?text=No+Cover'}
                       alt={data.title}
@@ -115,10 +137,10 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="space-y-1 min-w-0">
-                    <h4 className="text-xs md:text-sm font-black text-[#13231B] leading-tight truncate">{data.title}</h4>
-                    <p className="text-[11px] font-semibold text-[#6C8476] truncate">{data.author}</p>
-                    <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-md bg-[#EAF2ED] text-[#204E38] mt-1">
+                  <div className="space-y-1 w-full px-1">
+                    <h4 className="text-xs font-black text-[#13231B] leading-tight">{data.title}</h4>
+                    <p className="text-[11px] font-semibold text-[#6C8476]">{data.author}</p>
+                    <span className="inline-block text-[9px] font-bold px-2.5 py-0.5 rounded-full bg-[#EAF2ED] text-[#204E38] mt-1">
                       {data.status === 'finished' ? 'Selesai Dibaca' : 'Sedang Dibaca'}
                     </span>
                   </div>
@@ -127,13 +149,13 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
             </div>
 
             {/* Footer Canvas */}
-            <div className="z-10 flex justify-between items-end pt-1">
+            <div className="z-10 flex justify-between items-end shrink-0 pt-1">
               <div>
-                <p className="text-xs font-black text-[#204E38]">
-                  {type === 'quote' ? data.author : 'Koleksi Bacaan'}
+                <p className="text-xs font-black text-[#204E38] leading-none">
+                  {type === 'quote' ? 'Daily Reflection' : 'Reading Log'}
                 </p>
-                <p className="text-[9.5px] font-medium text-[#6C8476]">
-                  {type === 'quote' && data.pageNumber ? `Halaman ${data.pageNumber}` : 'Reading Tracker'}
+                <p className="text-[9.5px] font-medium text-[#6C8476] leading-none mt-1">
+                  Kutipan & Catatan Bacaan
                 </p>
               </div>
             </div>
@@ -143,14 +165,14 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
 
         {/* Preview Khusus untuk Pengguna HP */}
         {generatedImage && (
-          <div className="w-full p-3 bg-[#F4F8F5] rounded-2xl border border-[#DCE5DF] space-y-2 text-center animate-in fade-in duration-200">
-            <p className="text-[10.5px] font-bold text-[#204E38] leading-tight">
+          <div className="w-full p-2.5 bg-[#F4F8F5] rounded-2xl border border-[#DCE5DF] space-y-1.5 text-center animate-in fade-in duration-200">
+            <p className="text-[10px] font-bold text-[#204E38] leading-tight">
               📱 Pengguna HP: Tekan & tahan gambar di bawah ini lalu pilih "Simpan Gambar":
             </p>
             <img 
               src={generatedImage} 
-              alt="Hasil Render Card" 
-              className="w-full aspect-[4/3] max-w-[240px] mx-auto rounded-[16px] shadow-md border border-slate-200 object-cover"
+              alt="Hasil Render Story" 
+              className="w-full max-w-[150px] mx-auto rounded-[16px] shadow-md border border-slate-200 object-cover"
             />
           </div>
         )}
@@ -171,7 +193,7 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
             className="flex-1 py-2.5 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-[#204E38]/20 transition-all active:scale-95 disabled:opacity-50"
           >
             <Download size={14} />
-            <span>{isExporting ? 'Proses...' : 'Buat Gambar'}</span>
+            <span>{isExporting ? 'Proses...' : 'Buat Gambar Story'}</span>
           </button>
         </div>
 
