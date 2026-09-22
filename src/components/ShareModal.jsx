@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { X, Download, Copy, Check, Sparkles, Quote } from 'lucide-react';
+import { X, Copy, Check, Sparkles, Quote, Share2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
 export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
@@ -26,7 +26,7 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
 
     try {
       const canvas = await html2canvas(cardRef.current, {
-        scale: 3, // Kualitas HD 3x
+        scale: 3,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#F4F7F4',
@@ -36,15 +36,32 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
       const image = canvas.toDataURL('image/png');
       setGeneratedImage(image);
 
-      const link = document.createElement('a');
-      link.href = image;
-      link.download = `minor-notes-quote-${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Konversi Data URL ke File Blob untuk Web Share API di HP
+      const blob = await (await fetch(image)).blob();
+      const file = new File([blob], `minor-notes-quote-${Date.now()}.png`, { type: 'image/png' });
+
+      // Jika Browser HP Mendukung Web Share API
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Minor Notes Quote',
+          text: 'Shared from Minor Notes',
+        });
+      } else {
+        // Fallback untuk Browser Laptop/Desktop atau Browser HP yang memblokir Share API
+        const link = document.createElement('a');
+        link.href = image;
+        link.download = `minor-notes-quote-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (err) {
       console.error('Gagal memproses gambar:', err);
-      alert('Gagal membuat gambar. Silakan coba lagi.');
+      // Jika pengguna membatalkan dialog share, abaikan errornya
+      if (err.name !== 'AbortError') {
+        alert('Gagal membuat gambar. Silakan coba tekan dan tahan gambar preview di bawah untuk menyimpan.');
+      }
     } finally {
       setIsExporting(false);
     }
@@ -55,7 +72,6 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
     onClose();
   };
 
-  // Penyesuaian ukuran font dinamis berdasarkan panjang kutipan agar porsi visual tetap seimbang
   const getQuoteFontSize = (text = '') => {
     if (text.length > 250) return 'text-xs leading-relaxed';
     if (text.length > 120) return 'text-sm leading-relaxed';
@@ -80,13 +96,13 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
           </button>
         </div>
 
-        {/* Canvas Story Format (Flexible Dynamic Height to Prevent Any Text Clipping) */}
+        {/* Canvas Story Format */}
         <div className="w-full flex justify-center">
           <div
             ref={cardRef}
             className="w-[320px] min-h-[520px] bg-[#F4F7F4] rounded-[24px] p-6 flex flex-col justify-between relative select-none border border-slate-200/80 overflow-hidden shrink-0 gap-6"
           >
-            {/* Watermark Ornamen Tanda Petik Raksasa di Background */}
+            {/* Watermark Ornamen Tanda Petik Raksasa */}
             <div className="absolute -right-3 -bottom-8 text-[#86A789]/15 text-[200px] font-serif font-black leading-none pointer-events-none select-none">
               ”
             </div>
@@ -101,7 +117,7 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
               </span>
             </div>
 
-            {/* Dynamic White Card Overlay (Auto Heights & Justified Text) */}
+            {/* Dynamic White Card Overlay */}
             <div className="z-10 bg-white/95 backdrop-blur-sm rounded-[20px] p-5 shadow-[0_6px_20px_rgba(32,78,56,0.05)] border border-white flex flex-col justify-between space-y-4 my-auto">
               {type === 'quote' ? (
                 <div className="space-y-3">
@@ -109,7 +125,7 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
                     <Quote size={13} className="fill-[#204E38]" />
                   </div>
 
-                  {/* Teks Kutipan: Normal Font (Not Italic), Justified, Dynamic Font Size */}
+                  {/* Teks Kutipan: Normal Font (Not Italic), Justified */}
                   <p className={`font-semibold text-[#13231B] text-justify tracking-normal not-italic ${getQuoteFontSize(data.quote)}`}>
                     "{data.quote}"
                   </p>
@@ -165,14 +181,14 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
 
         {/* Preview Khusus untuk Pengguna HP */}
         {generatedImage && (
-          <div className="w-full p-2.5 bg-[#F4F8F5] rounded-2xl border border-[#DCE5DF] space-y-1.5 text-center animate-in fade-in duration-200">
-            <p className="text-[10px] font-bold text-[#204E38] leading-tight">
-              📱 Pengguna HP: Tekan & tahan gambar di bawah ini lalu pilih "Simpan Gambar":
+          <div className="w-full p-3 bg-[#F4F8F5] rounded-2xl border border-[#DCE5DF] space-y-2 text-center animate-in fade-in duration-200">
+            <p className="text-[10.5px] font-bold text-[#204E38] leading-tight">
+              📱 Tekan & tahan gambar di bawah ini untuk menyimpan ke Galeri HP:
             </p>
             <img 
               src={generatedImage} 
               alt="Hasil Render Story" 
-              className="w-full max-w-[150px] mx-auto rounded-[16px] shadow-md border border-slate-200 object-cover"
+              className="w-full max-w-[180px] mx-auto rounded-[16px] shadow-md border border-slate-200 object-cover"
             />
           </div>
         )}
@@ -192,8 +208,8 @@ export default function ShareModal({ isOpen, onClose, data, type = 'quote' }) {
             disabled={isExporting}
             className="flex-1 py-2.5 bg-[#204E38] hover:bg-[#153425] text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-[#204E38]/20 transition-all active:scale-95 disabled:opacity-50"
           >
-            <Download size={14} />
-            <span>{isExporting ? 'Proses...' : 'Buat Gambar Story'}</span>
+            <Share2 size={14} />
+            <span>{isExporting ? 'Proses...' : 'Bagikan / Simpan'}</span>
           </button>
         </div>
 
